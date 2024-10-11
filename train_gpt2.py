@@ -1,44 +1,194 @@
+import csv
 import os
 import math
 import time
 import inspect
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional
 import torch
+import torch.autograd as autograd
 import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
 # -----------------------------------------------------------------------------
 
-class GatedSAE(nn.Module):
+
+@dataclass
+class ModelOutput:
+    logits: torch.Tensor
+    gpt_loss: torch.Tensor = torch.Tensor()
+    sae_reconstruction_losses: torch.Tensor = torch.Tensor()
+    sae_sparsity_losses: torch.Tensor = torch.Tensor()
+    sae_aux_losses: torch.Tensor = torch.Tensor()
+    sae_l0_losses: torch.Tensor = torch.Tensor()
+
+
+@dataclass
+class SAEForwardOutput:
     """
-    Gated Sparse Autoencoder module.
-    https://arxiv.org/abs/2404.16014
+    Output from the forward pass of an SAE model.
     """
 
-    def __init__(self, config):
+    reconstructed_activations: torch.Tensor
+    feature_magnitudes: torch.Tensor
+    reconstruct_loss: torch.Tensor
+    sparsity_loss: torch.Tensor
+    aux_loss: torch.Tensor
+    l0: torch.Tensor
+
+
+class JumpReLUSAE(nn.Module):
+    """
+    JumpRelU Autoencoder module.
+    https://arxiv.org/pdf/2407.14435
+
+    Derived from:
+    https://github.com/bartbussmann/BatchTopK/blob/main/sae.py
+    """
+
+    def __init__(self, config, layer_idx):
         """
         n_embd: GPT embedding size.
         n_sae: SAE dictionary size.
         """
         super().__init__()
-        self.l1_coefficient = config.l1_coefficient
+        self.sparsity_coefficient = config.sparsity_coefficient
+        self.bandwidth = config.bandwidth
+        self.b_dec = nn.Parameter(torch.zeros(config.n_embd))
+        self.b_enc = nn.Parameter(torch.zeros(config.n_sae))
+        # TODO: Do we need to unit normalize the columns of W_enc?
+        self.W_enc = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(config.n_embd, config.n_sae)))
+        self.W_dec = nn.Parameter(self.W_enc.mT.detach().clone())
+        self.log_threshold = nn.Parameter(torch.full((config.n_sae,), math.log(self.bandwidth)))
+
+    def encode(self, x: torch.Tensor, gain: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x = x - self.b_dec
+
+        pre_activations = torch.relu(x @ self.W_enc + self.b_enc)
+        threshold = torch.exp(self.log_threshold)
+        feature_magnitudes: torch.Tensor = JumpReLUFunction.apply(pre_activations, threshold, self.bandwidth)  # type: ignore
+
+        if gain is not None:
+            feature_magnitudes = feature_magnitudes * gain
+
+        return feature_magnitudes
+
+    def decode(self, x: torch.Tensor):
+        """
+        x: SAE activations (batch_size, n_sae)
+        """
+        return x @ self.W_dec + self.b_dec
+
+    def forward(self, x: torch.Tensor, gain: Optional[torch.Tensor] = None) -> SAEForwardOutput:
+        """
+        Returns (i) a reconstruction of GPT model activations, (ii) the SAE activations, and (iii) SAE loss components.
+
+        x: GPT model activations (batch_size, n_embd)
+        """
+        feature_magnitudes = self.encode(x, gain)
+        x_reconstructed = self.decode(feature_magnitudes)
+
+        # L2 reconstruction loss
+        reconstruction_loss = F.mse_loss(x_reconstructed, x)
+
+        # L0 sparsity loss
+        threshold = torch.exp(self.log_threshold)
+        l0 = (
+            StepFunction.apply(
+                feature_magnitudes,
+                threshold,
+                self.bandwidth,
+            )
+            .sum(dim=-1)  # type: ignore
+            .mean()
+        )
+        sparsity_loss = l0 * self.sparsity_coefficient
+        aux_loss = torch.zeros_like(sparsity_loss)
+
+        return SAEForwardOutput(x_reconstructed, feature_magnitudes, reconstruction_loss, sparsity_loss, aux_loss, l0)
+
+
+class JumpReLUFunction(autograd.Function):
+    @staticmethod
+    def rectangle(x) -> torch.Tensor:
+        return ((x > -0.5) & (x < 0.5)).float()
+
+    @staticmethod
+    def forward(ctx, x, threshold, bandwidth):
+        ctx.save_for_backward(x, threshold, torch.tensor(bandwidth))
+        return x * (x > threshold)
+
+    @staticmethod
+    def backward(ctx, output_grad):
+        x, threshold, bandwidth_tensor = ctx.saved_tensors
+        bandwidth = bandwidth_tensor.item()
+        x_grad = (x > threshold) * output_grad
+        threshold_grad = (
+            -(threshold / bandwidth) * JumpReLUFunction.rectangle((x - threshold) / bandwidth) * output_grad
+        )
+        return x_grad, threshold_grad, None  # None for bandwidth
+
+
+class StepFunction(autograd.Function):
+    @staticmethod
+    def rectangle(x) -> torch.Tensor:
+        return ((x > -0.5) & (x < 0.5)).float()
+
+    @staticmethod
+    def forward(ctx, x, threshold, bandwidth) -> torch.Tensor:
+        ctx.save_for_backward(x, threshold, torch.tensor(bandwidth))
+        return (x > threshold).float()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x, threshold, bandwidth_tensor = ctx.saved_tensors
+        bandwidth = bandwidth_tensor.item()
+        x_grad = torch.zeros_like(grad_output)
+        threshold_grad = -(1.0 / bandwidth) * StepFunction.rectangle((x - threshold) / bandwidth) * grad_output
+        return x_grad, threshold_grad, None  # None for bandwidth
+
+
+class BaseGatedSAE(nn.Module):
+    """
+    Gated Sparse Autoencoder module.
+    https://arxiv.org/abs/2404.16014
+    """
+
+    def __init__(self, config, layer_idx):
+        """
+        n_embd: GPT embedding size.
+        n_sae: SAE dictionary size.
+        """
+        super().__init__()
+        self.l1_coefficient = config.l1_coefficients[layer_idx]
         self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(config.n_sae, config.n_embd)))
-        self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
-        self.r_mag = nn.Parameter(torch.zeros(config.n_sae))
         self.b_gate = nn.Parameter(torch.zeros(config.n_sae))
         self.b_mag = nn.Parameter(torch.zeros(config.n_sae))
         self.b_dec = nn.Parameter(torch.zeros(config.n_embd))
 
-    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x_centered = x - self.b_dec
-        pi_gate = x_centered @ self.W_gate + self.b_gate
-        f_gate = (pi_gate > 0).float()  # gate activations
+    def get_W_gate(self):
+        """
+        To be implemented by derived classes.
+        """
+        raise NotImplementedError()
 
-        W_mag = self.W_gate * torch.exp(self.r_mag)
-        f_mag = F.relu(x_centered @ W_mag + self.b_mag)  # magnitude of the activations
+    def get_W_mag(self):
+        """
+        To be implemented by derived classes.
+        """
+        raise NotImplementedError()
+
+    def encode(self, x: torch.Tensor, gain: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, torch.Tensor]:
+        x_centered = x - self.b_dec
+        pi_gate = x_centered @ self.get_W_gate() + self.b_gate
+
+        f_gate = (pi_gate > 0).float()  # whether to gate the feature
+        f_mag = F.relu(x_centered @ self.get_W_mag() + self.b_mag)  # feature magnitudes
 
         x_encoded = f_gate * f_mag
+
+        if gain is not None:
+            x_encoded = x_encoded * gain
 
         return x_encoded, pi_gate
 
@@ -48,17 +198,21 @@ class GatedSAE(nn.Module):
         """
         return x @ self.W_dec + self.b_dec
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, gain: Optional[torch.Tensor] = None) -> SAEForwardOutput:
         """
         Returns (i) a reconstruction of GPT model activations, (ii) the SAE activations, and (iii) SAE loss components.
 
         x: GPT model activations (batch_size, n_embd)
         """
-        x_encoded, pi_gate = self.encode(x)
-        x_reconstructed = self.decode(x_encoded)
+        feature_magnitudes, pi_gate = self.encode(x, gain)
+        x_reconstructed = self.decode(feature_magnitudes)
 
+        # L2 reconstruction loss
         reconstruction_loss = F.mse_loss(x_reconstructed, x)
-        sparsity_loss = F.l1_loss(F.relu(pi_gate), torch.zeros_like(pi_gate))
+
+        # Use Gated (RI-L1) sparsity variant: https://arxiv.org/pdf/2407.14435
+        scaled_pi_gate = F.relu(pi_gate) * self.W_dec.data.norm(dim=1)
+        sparsity_loss = F.l1_loss(scaled_pi_gate, torch.zeros_like(pi_gate)) * self.l1_coefficient
 
         # compute the auxiliary loss
         W_dec_clone = self.W_dec.clone().detach()
@@ -66,9 +220,47 @@ class GatedSAE(nn.Module):
         x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
         aux_loss = F.mse_loss(x_hat_frozen, x)
 
-        losses = torch.stack([reconstruction_loss, self.l1_coefficient * sparsity_loss, aux_loss])
+        # L0 sparsity loss
+        l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
 
-        return x_reconstructed, x_encoded, losses
+        return SAEForwardOutput(x_reconstructed, feature_magnitudes, reconstruction_loss, sparsity_loss, aux_loss, l0)
+
+
+class GatedSAE(BaseGatedSAE):
+    """
+    Standed Gated Sparse Autoencoder module (RI-L1).
+    """
+
+    def __init__(self, config, layer_idx):
+        super().__init__(config, layer_idx)
+        self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
+        self.r_mag = nn.Parameter(torch.zeros(config.n_sae))
+
+    def get_W_gate(self):
+        return self.W_gate
+
+    def get_W_mag(self):
+        return self.get_W_gate() * torch.exp(self.r_mag)
+
+
+class GatedSAE_V2(BaseGatedSAE):
+    """
+    Experimental Gated Sparse Autoencoder module that ties the encoder and decoder weights to avoid feature absorption.
+    Reference: https://www.lesswrong.com/posts/kcg58WhRxFA9hv9vN
+    """
+
+    def get_W_gate(self):
+        """
+        Tying encoder weights to decoder weights.
+        """
+        return self.W_dec.t()
+
+    def get_W_mag(self):
+        """
+        The r_mag scaler doesn't seem useful after weights are tied.
+        """
+        return self.get_W_gate()
+
 
 class CausalSelfAttention(nn.Module):
 
@@ -115,21 +307,23 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         return x
 
+
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, layer_idx):
         super().__init__()
         self.ln_1 = nn.LayerNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = nn.LayerNorm(config.n_embd)
         self.mlp = MLP(config)
-        self.sae = GatedSAE(config)
+        self.sae = GatedSAE_V2(config, layer_idx)
 
-    def forward(self, x):
+    def forward(self, x) -> tuple[torch.Tensor, SAEForwardOutput]:
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
-        x_reconstructed, x_encoded, sae_losses = self.sae(x)
-        return x, x_reconstructed, x_encoded, sae_losses
+        sae_output = self.sae(x)
+        return x, sae_output
+
 
 @dataclass
 class GPTConfig:
@@ -138,8 +332,9 @@ class GPTConfig:
     n_layer: int = 12 # number of layers
     n_head: int = 12 # number of heads
     n_embd: int = 768 # embedding dimension
-    n_sae: int = 768 * 16 # number of SAE features
-    l1_coefficient: int = 5 # l1 coefficient for sae sparsity loss
+    n_sae: int = n_embd * 16 # number of SAE features
+    l1_coefficients: tuple = (1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.) # SAE L1 regularization coefficients
+
 
 class GPT(nn.Module):
 
@@ -150,7 +345,7 @@ class GPT(nn.Module):
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            h = nn.ModuleList([Block(config, layer_idx=i+1) for i in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
@@ -158,7 +353,7 @@ class GPT(nn.Module):
         # weight sharing scheme
         self.transformer.wte.weight = self.lm_head.weight
 
-        self.sae = GatedSAE(config)
+        self.sae = GatedSAE_V2(config, layer_idx=0)
 
         # init params
         self.apply(self._init_weights)
@@ -184,27 +379,41 @@ class GPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (B, T, n_embd)
         x = tok_emb + pos_emb
 
-        sae_losses = []
+        sae_reconstruction_losses_layers = []
+        sae_sparsity_losses_layers = []
+        sae_aux_losses_layers = []
+        sae_l0_losses_layers = []
 
-        _, _, embedding_sae_losses = self.sae(x)
-        sae_losses.append(embedding_sae_losses)
+        embedding_sae_output = self.sae(x)
+        sae_reconstruction_losses_layers.append(embedding_sae_output.reconstruct_loss)
+        sae_sparsity_losses_layers.append(embedding_sae_output.sparsity_loss)
+        sae_aux_losses_layers.append(embedding_sae_output.aux_loss)
+        sae_l0_losses_layers.append(embedding_sae_output.l0)
 
         # forward the blocks of the transformer
         for block in self.transformer.h:
-            x, _, _, block_sae_losses = block(x)
-            sae_losses.append(block_sae_losses)
+            x, block_sae_output = block(x)
+            sae_reconstruction_losses_layers.append(block_sae_output.reconstruct_loss)
+            sae_sparsity_losses_layers.append(block_sae_output.sparsity_loss)
+            sae_aux_losses_layers.append(block_sae_output.aux_loss)
+            sae_l0_losses_layers.append(block_sae_output.l0)
 
         # forward the final layernorm and the classifier
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x) # (B, T, vocab_size)
-        loss = None
         if targets is not None:
             gpt_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-            # Average SAE loss components over the layers
-            sae_loss = torch.stack(sae_losses).sum(-1).mean()
-            loss = gpt_loss + sae_loss
 
-        return logits, loss
+            return ModelOutput(
+                logits=logits,
+                gpt_loss=gpt_loss,
+                sae_reconstruction_losses=torch.stack(sae_reconstruction_losses_layers),
+                sae_sparsity_losses=torch.stack(sae_sparsity_losses_layers),
+                sae_aux_losses=torch.stack(sae_aux_losses_layers),
+                sae_l0_losses=torch.stack(sae_l0_losses_layers)
+            )
+
+        return ModelOutput(logits=logits)
 
     @classmethod
     def from_pretrained(cls, model_type):
@@ -401,7 +610,7 @@ if torch.cuda.is_available():
 enc = tiktoken.get_encoding("gpt2")
 
 total_batch_size = 524288 # 2**19, ~0.5M, in number of tokens
-B = 64 # micro batch size
+B = 8 # micro batch size
 T = 1024 # sequence length
 assert total_batch_size % (B * T * ddp_world_size) == 0, "make sure total_batch_size is divisible by B * T * ddp_world_size"
 grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
@@ -448,9 +657,11 @@ optimizer = raw_model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4,
 # create the log directory we will write checkpoints to and log to
 log_dir = "log"
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"log.txt")
-with open(log_file, "w") as f: # open for writing to clear the file
-    pass
+csv_file = open(os.path.join(log_dir, f"{int(time.time())}.csv"), "w")
+csv_writer = csv.DictWriter(csv_file, fieldnames=[
+    "type", "step", "gpt", "sae_reconstruction", "sae_sparsity", "sae_aux", "sae_l0", "loss", "hella", "lr", "norm", "dt", "tok/sec"
+])
+csv_writer.writeheader()
 
 for step in range(max_steps):
     t0 = time.time()
@@ -461,29 +672,56 @@ for step in range(max_steps):
         model.eval()
         val_loader.reset()
         with torch.no_grad():
-            val_loss_accum = 0.0
+            val_gpt_loss_accum = torch.tensor(0., device=device)
+            val_sae_reconstruction_accum = torch.tensor(0., device=device)
+            val_sae_sparsity_accum = torch.tensor(0., device=device)
+            val_sae_aux_accum = torch.tensor(0., device=device)
+            val_sae_l0_accum = torch.tensor(0., device=device)
             val_loss_steps = 20
             for _ in range(val_loss_steps):
                 x, y = val_loader.next_batch()
                 x, y = x.to(device), y.to(device)
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    logits, loss = model(x, y)
-                loss = loss / val_loss_steps
-                val_loss_accum += loss.detach()
+                    model_output: ModelOutput = model(x, y)
+                val_gpt_loss_accum += (model_output.gpt_loss / val_loss_steps).detach()
+                val_sae_reconstruction_accum += (model_output.sae_reconstruction_losses.mean() / val_loss_steps).detach()
+                val_sae_sparsity_accum += (model_output.sae_sparsity_losses.mean() / val_loss_steps).detach()
+                val_sae_aux_accum += (model_output.sae_aux_losses.mean() / val_loss_steps).detach()
+                val_sae_l0_accum += (model_output.sae_l0_losses.mean() / val_loss_steps).detach()
+
         if ddp:
-            dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_gpt_loss_accum, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_sae_reconstruction_accum, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_sae_sparsity_accum, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_sae_aux_accum, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_sae_l0_accum, op=dist.ReduceOp.AVG)
+
+        val_loss_accum = val_gpt_loss_accum + val_sae_reconstruction_accum + val_sae_sparsity_accum + val_sae_aux_accum
+
         if master_process:
-            print(f"validation loss: {val_loss_accum.item():.4f}")
-            with open(log_file, "a") as f:
-                f.write(f"{step} val {val_loss_accum.item():.4f}\n")
+            log_data = {
+                "type": "eval",
+                "step": step,
+                "gpt": round(val_gpt_loss_accum.item(), 6),
+                "sae_reconstruction": round(val_sae_reconstruction_accum.item(), 6),
+                "sae_sparsity": round(val_sae_sparsity_accum.item(), 6),
+                "sae_aux": round(val_sae_aux_accum.item(), 6),
+                "sae_l0": round(val_sae_l0_accum.item(), 6),
+                "loss": round(val_loss_accum.item(), 6),
+            }
+            csv_writer.writerow(log_data)
+            csv_file.flush()
+            print(" | ".join([f"{k} {v}" for k, v in log_data.items()]))
+
             if step > 0 and (step % 5000 == 0 or last_step):
                 # optionally write model checkpoints
                 checkpoint_path = os.path.join(log_dir, f"model_{step:05d}.pt")
+                checkpoint_metadata = log_data.copy()
+                del checkpoint_metadata["type"]
                 checkpoint = {
                     'model': raw_model.state_dict(),
                     'config': raw_model.config,
-                    'step': step,
-                    'val_loss': val_loss_accum.item()
+                    **checkpoint_metadata,
                 }
                 # you might also want to add optimizer.state_dict() and
                 # rng seeds etc., if you wanted to more exactly resume training
@@ -504,8 +742,8 @@ for step in range(max_steps):
             # get the logits
             with torch.no_grad():
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    logits, loss = model(tokens)
-                pred_norm = get_most_likely_row(tokens, mask, logits)
+                    model_output: ModelOutput = model(tokens)
+                pred_norm = get_most_likely_row(tokens, mask, model_output.logits)
             num_total += 1
             num_correct_norm += int(pred_norm == label)
         # reduce the stats across all processes
@@ -519,8 +757,13 @@ for step in range(max_steps):
         acc_norm = num_correct_norm / num_total
         if master_process:
             print(f"HellaSwag accuracy: {num_correct_norm}/{num_total}={acc_norm:.4f}")
-            with open(log_file, "a") as f:
-                f.write(f"{step} hella {acc_norm:.4f}\n")
+            log_data = {
+                "type": "eval",
+                "step": step,
+                "hella": acc_norm,
+            }
+            csv_writer.writerow(log_data)
+            csv_file.flush()
 
     # once in a while generate from the model (except step 0, which is noise)
     if ((step > 0 and step % 250 == 0) or last_step) and (not use_compile):
@@ -537,9 +780,9 @@ for step in range(max_steps):
             # forward the model to get the logits
             with torch.no_grad():
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    logits, loss = model(xgen) # (B, T, vocab_size)
+                    model_output: ModelOutput = model(xgen) # (B, T, vocab_size)
                 # take the logits at the last position
-                logits = logits[:, -1, :] # (B, vocab_size)
+                logits = model_output.logits[:, -1, :] # (B, vocab_size)
                 # get the probabilities
                 probs = F.softmax(logits, dim=-1)
                 # do top-k sampling of 50 (huggingface pipeline default)
@@ -561,7 +804,11 @@ for step in range(max_steps):
     # do one step of the optimization
     model.train()
     optimizer.zero_grad()
-    loss_accum = 0.0
+    gpt_loss_accum = torch.tensor(0., device=device)
+    sae_reconstruction_accum = torch.tensor(0., device=device)
+    sae_sparsity_accum = torch.tensor(0., device=device)
+    sae_aux_accum = torch.tensor(0., device=device)
+    sae_l0_accum = torch.tensor(0., device=device)
     for micro_step in range(grad_accum_steps):
         x, y = train_loader.next_batch()
         x, y = x.to(device), y.to(device)
@@ -569,16 +816,37 @@ for step in range(max_steps):
         if ddp:
             model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1)
         with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-            logits, loss = model(x, y)
+            model_output: ModelOutput = model(x, y)
+
         # we have to scale the loss to account for gradient accumulation,
         # because the gradients just add on each successive backward().
         # addition of gradients corresponds to a SUM in the objective, but
         # instead of a SUM we want MEAN. Scale the loss here so it comes out right
-        loss = loss / grad_accum_steps
-        loss_accum += loss.detach()
+        gpt_loss = model_output.gpt_loss / grad_accum_steps
+        # Average SAE loss components over the layers
+        sae_reconstruction_loss = model_output.sae_reconstruction_losses.mean() / grad_accum_steps
+        sae_sparsity_loss = model_output.sae_sparsity_losses.mean() / grad_accum_steps
+        sae_aux_loss = model_output.sae_aux_losses.mean() / grad_accum_steps
+        sae_l0_loss = model_output.sae_l0_losses.mean() / grad_accum_steps
+
+        gpt_loss_accum += gpt_loss.detach()
+        sae_reconstruction_accum += sae_reconstruction_loss.detach()
+        sae_sparsity_accum += sae_sparsity_loss.detach()
+        sae_aux_accum += sae_aux_loss.detach()
+        sae_l0_accum += sae_l0_loss.detach()
+
+        loss = gpt_loss + sae_reconstruction_loss + sae_sparsity_loss + sae_aux_loss
         loss.backward()
+
     if ddp:
-        dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
+        dist.all_reduce(gpt_loss_accum, op=dist.ReduceOp.AVG)
+        dist.all_reduce(sae_reconstruction_accum, op=dist.ReduceOp.AVG)
+        dist.all_reduce(sae_sparsity_accum, op=dist.ReduceOp.AVG)
+        dist.all_reduce(sae_aux_accum, op=dist.ReduceOp.AVG)
+        dist.all_reduce(sae_l0_accum, op=dist.ReduceOp.AVG)
+
+    loss_accum = gpt_loss_accum + sae_reconstruction_accum + sae_sparsity_accum + sae_aux_accum
+
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     # determine and set the learning rate for this iteration
     lr = get_lr(step)
@@ -592,9 +860,26 @@ for step in range(max_steps):
     tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
     tokens_per_sec = tokens_processed / dt
     if master_process:
-        print(f"step {step:5d} | loss: {loss_accum.item():.6f} | lr {lr:.4e} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tok/sec: {tokens_per_sec:.2f}")
-        with open(log_file, "a") as f:
-            f.write(f"{step} train {loss_accum.item():.6f}\n")
+        log_data = {
+            "type": "train",
+            "step": step,
+            "gpt": round(gpt_loss_accum.item(), 6),
+            "sae_reconstruction": round(sae_reconstruction_accum.item(), 6),
+            "sae_sparsity": round(sae_sparsity_accum.item(), 6),
+            "sae_aux": round(sae_aux_accum.item(), 6),
+            "sae_l0": round(sae_l0_accum.item(), 6),
+            "loss": round(loss_accum.item(), 6),
+            "lr": f"{lr:.4e}",
+            "norm": round(norm.item(), 4),
+            "dt": round(dt, 4),
+            "tok/sec": round(tokens_per_sec, 2),
+        }
+        csv_writer.writerow(log_data)
+        csv_file.flush()
+
+        print(" | ".join([f"{k} {v}" for k, v in log_data.items()]))
 
 if ddp:
     destroy_process_group()
+
+csv_file.close()
