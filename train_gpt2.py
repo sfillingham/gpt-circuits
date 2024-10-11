@@ -3,11 +3,72 @@ import math
 import time
 import inspect
 from dataclasses import dataclass
+from typing import Optional
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
 # -----------------------------------------------------------------------------
+
+class GatedSAE(nn.Module):
+    """
+    Gated Sparse Autoencoder module.
+    https://arxiv.org/abs/2404.16014
+    """
+
+    def __init__(self, config):
+        """
+        n_embd: GPT embedding size.
+        n_sae: SAE dictionary size.
+        """
+        super().__init__()
+        self.l1_coefficient = config.l1_coefficient
+        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(config.n_sae, config.n_embd)))
+        self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
+        self.r_mag = nn.Parameter(torch.zeros(config.n_sae))
+        self.b_gate = nn.Parameter(torch.zeros(config.n_sae))
+        self.b_mag = nn.Parameter(torch.zeros(config.n_sae))
+        self.b_dec = nn.Parameter(torch.zeros(config.n_embd))
+
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x_centered = x - self.b_dec
+        pi_gate = x_centered @ self.W_gate + self.b_gate
+        f_gate = (pi_gate > 0).float()  # gate activations
+
+        W_mag = self.W_gate * torch.exp(self.r_mag)
+        f_mag = F.relu(x_centered @ W_mag + self.b_mag)  # magnitude of the activations
+
+        x_encoded = f_gate * f_mag
+
+        return x_encoded, pi_gate
+
+    def decode(self, x: torch.Tensor):
+        """
+        x: SAE activations (batch_size, n_sae)
+        """
+        return x @ self.W_dec + self.b_dec
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Returns (i) a reconstruction of GPT model activations, (ii) the SAE activations, and (iii) SAE loss components.
+
+        x: GPT model activations (batch_size, n_embd)
+        """
+        x_encoded, pi_gate = self.encode(x)
+        x_reconstructed = self.decode(x_encoded)
+
+        reconstruction_loss = F.mse_loss(x_reconstructed, x)
+        sparsity_loss = F.l1_loss(F.relu(pi_gate), torch.zeros_like(pi_gate))
+
+        # compute the auxiliary loss
+        W_dec_clone = self.W_dec.clone().detach()
+        b_dec_clone = self.b_dec.clone().detach()
+        x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
+        aux_loss = F.mse_loss(x_hat_frozen, x)
+
+        losses = torch.stack([reconstruction_loss, self.l1_coefficient * sparsity_loss, aux_loss])
+
+        return x_reconstructed, x_encoded, losses
 
 class CausalSelfAttention(nn.Module):
 
@@ -62,11 +123,13 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(config)
         self.ln_2 = nn.LayerNorm(config.n_embd)
         self.mlp = MLP(config)
+        self.sae = GatedSAE(config)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
-        return x
+        x_reconstructed, x_encoded, sae_losses = self.sae(x)
+        return x, x_reconstructed, x_encoded, sae_losses
 
 @dataclass
 class GPTConfig:
@@ -75,6 +138,8 @@ class GPTConfig:
     n_layer: int = 12 # number of layers
     n_head: int = 12 # number of heads
     n_embd: int = 768 # embedding dimension
+    n_sae: int = 768 * 16 # number of SAE features
+    l1_coefficient: int = 5 # l1 coefficient for sae sparsity loss
 
 class GPT(nn.Module):
 
@@ -92,6 +157,8 @@ class GPT(nn.Module):
 
         # weight sharing scheme
         self.transformer.wte.weight = self.lm_head.weight
+
+        self.sae = GatedSAE(config)
 
         # init params
         self.apply(self._init_weights)
@@ -116,15 +183,27 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (T, n_embd)
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (B, T, n_embd)
         x = tok_emb + pos_emb
+
+        sae_losses = []
+
+        _, _, embedding_sae_losses = self.sae(x)
+        sae_losses.append(embedding_sae_losses)
+
         # forward the blocks of the transformer
         for block in self.transformer.h:
-            x = block(x)
+            x, _, _, block_sae_losses = block(x)
+            sae_losses.append(block_sae_losses)
+
         # forward the final layernorm and the classifier
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x) # (B, T, vocab_size)
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            gpt_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            # Average SAE loss components over the layers
+            sae_loss = torch.stack(sae_losses).sum(-1).mean()
+            loss = gpt_loss + sae_loss
+
         return logits, loss
 
     @classmethod
