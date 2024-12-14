@@ -248,7 +248,7 @@ class DataLoaderLite:
         assert split in {"train", "val"}
 
         # get the shard filenames
-        data_root = "data/fairy_tales"
+        data_root = "data/pile_10k"
         shards = os.listdir(data_root)
         shards = [s for s in shards if split in s]
         shards = sorted(shards)
