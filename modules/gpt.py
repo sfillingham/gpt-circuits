@@ -21,7 +21,6 @@ class CausalSelfAttention(nn.Module):
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
-        self.c_proj.NANOGPT_SCALE_INIT = 1
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -50,7 +49,6 @@ class MLP(nn.Module):
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
         self.gelu = nn.GELU(approximate="tanh")
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
-        self.c_proj.NANOGPT_SCALE_INIT = 1
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -103,12 +101,15 @@ class GPT(nn.Module):
         self.transformer.wte.weight = self.lm_head.weight
 
         # init params
-        self.apply(self._init_weights)
+        for name, module in self.named_modules():
+            self._init_weights(name, module)
 
-    def _init_weights(self, module):
+    def _init_weights(self, name, module):
         if isinstance(module, nn.Linear):
             std = 0.02
-            if hasattr(module, "NANOGPT_SCALE_INIT"):
+            if name.endswith(".c_proj"):
+                # "Weights of residual layers are scaled at initialization by a factor of 1/√N
+                # where N is the number of residual layers."
                 std *= (2 * self.config.n_layer) ** -0.5
             torch.nn.init.normal_(module.weight, mean=0.0, std=std)
             if module.bias is not None:
