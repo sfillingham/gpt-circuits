@@ -1,5 +1,7 @@
-*.npy
 *.csv
+*.json
+*.npy
+*.safetensors
 
 # OS files
 .DS_Store

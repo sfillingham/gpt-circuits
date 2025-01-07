@@ -37,10 +37,11 @@ class TikTokenTokenizer(BaseTokenizer):
     Tokenizer for TikToken.
     """
 
+    # 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
+    vocab_size = 50257
+
     def __init__(self):
         self.encoding = tiktoken.get_encoding("gpt2")
-        # 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
-        self.vocab_size = 50257
 
     def encode(self, text) -> list[int]:
         return self.encoding.encode(text, allowed_special="all")
@@ -63,8 +64,7 @@ class ASCIITokenizer(BaseTokenizer):
     Tokenizer that treats each character in the input as a token.
     """
 
-    def __init__(self):
-        self.vocab_size = 128
+    vocab_size = 128
 
     def encode(self, text) -> list[int]:
         # Note that invalid characters are replaced with "?".
@@ -75,3 +75,4 @@ class ASCIITokenizer(BaseTokenizer):
 
     def decode_token(self, token: int) -> str:
         return chr(token)
+
