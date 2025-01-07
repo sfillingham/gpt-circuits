@@ -179,7 +179,7 @@ for step in range(max_steps):
 
             # Save the model if it's the best we've seen so far
             best_val_loss = min(best_val_loss, val_loss)
-            if best_val_loss == val_loss:
+            if best_val_loss == val_loss and step > 0:
                 print("Saving checkpoint")
                 unwrapped_model.save(config.out_dir)
 
@@ -215,7 +215,9 @@ for step in range(max_steps):
 
     loss_accum = ce_loss_accum
 
-    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
+    # clip the gradients (if a grad clip value is provided)
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip or float("inf"))
+
     # determine and set the learning rate for this iteration
     lr = get_lr(step) if config.decay_lr else max_lr
     for param_group in optimizer.param_groups:
@@ -227,7 +229,7 @@ for step in range(max_steps):
     dt = t1 - t0  # time difference in seconds
     tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
     tokens_per_sec = tokens_processed / dt
-    if master_process:
+    if master_process and step % 10 == 0:
         log_data = {
             "type": "train",
             "step": step,
@@ -246,3 +248,5 @@ if ddp:
     destroy_process_group()
 
 csv_file.close()
+
+print(f"Best validation loss: {best_val_loss}")

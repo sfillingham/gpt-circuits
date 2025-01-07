@@ -26,14 +26,28 @@ class GPTConfig:
 
 # Configuration options
 options: dict[str, GPTConfig] = {
-    "32x4": GPTConfig(
+    "ascii_64x4": GPTConfig(
+        block_size=128,
+        vocab_size=ASCIITokenizer.vocab_size,
+        n_layer=4,
+        n_head=4,
+        n_embd=64,
+    ),
+    "ascii_128x6": GPTConfig(
+        block_size=128,
+        vocab_size=ASCIITokenizer.vocab_size,
+        n_layer=6,
+        n_head=4,
+        n_embd=128,
+    ),
+    "tiktoken_32x4": GPTConfig(
         block_size=128,
         vocab_size=TikTokenTokenizer.vocab_size,
         n_layer=4,
         n_head=16,
         n_embd=32,
     ),
-    "64x2": GPTConfig(
+    "tiktoken_64x2": GPTConfig(
         block_size=128,
         vocab_size=TikTokenTokenizer.vocab_size,
         n_layer=2,
