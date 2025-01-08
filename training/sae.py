@@ -1,30 +1,28 @@
+"""
+Train GPT model:
+$ python -m training.sae --config=gated_v2_shakespeare_64x4
+
+DDP launch for e.g. 8 GPUs:
+$ torchrun --standalone --nproc_per_node=8 -m training.sae --config=gated_v2_shakespeare_64x4
+"""
+
 import argparse
-import csv
-import math
 import os
 import time
 
-# -----------------------------------------------------------------------------
 import torch
-
-# run the training loop
 import torch.distributed as dist
 from torch.distributed import destroy_process_group, init_process_group
-from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from config.training import options as training_options
+from config.sae import training_options
 from data.dataloaders import DataLoaderLite
-from models.gpt import GPT, ModelOutput
-
-# -----------------------------------------------------------------------------
-# simple launch:
-# python train_gpt2.py
-# DDP launch for e.g. 8 GPUs:
-# torchrun --standalone --nproc_per_node=8 train_gpt2.py
+from models import ModelOutput
+from models.sae import SparsifiedGPT
+from training import get_lr
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="32x4", help="GPT2 config")
+parser.add_argument("--config", type=str, default="gated_v2_shakespeare_64x4", help="Training config")
 parser.add_argument("--load_from", type=str, help="Path to load model from")
 args = parser.parse_args()
 
@@ -68,10 +66,10 @@ if master_process:
 
 # create model
 if args.load_from:
-    model = GPT.load(args.load_from, device=device)
+    model = SparsifiedGPT.load(args.load_from, device=device)
     print(f"Loaded saved model from {args.load_from}")
 else:
-    model = GPT(config.gpt_config)
+    model = SparsifiedGPT(config.sae_config)
     print("Initialized model from scratch")
 model = model.to(device)
 
@@ -94,28 +92,6 @@ val_loader = DataLoaderLite(
     dir_path=config.data_dir, B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val"
 )
 
-torch.set_float32_matmul_precision("high")
-
-max_lr = config.learning_rate
-min_lr = config.min_lr
-warmup_steps = config.warmup_steps
-max_steps = config.max_steps
-
-
-def get_lr(it):
-    # 1) linear warmup for warmup_iters steps
-    if it < warmup_steps:
-        return max_lr * (it + 1) / warmup_steps
-    # 2) if it > lr_decay_iters, return min learning rate
-    if it > max_steps:
-        return min_lr
-    # 3) in between, use cosine decay down to min learning rate
-    decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)
-    assert 0 <= decay_ratio <= 1
-    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff starts at 1 and goes to 0
-    return min_lr + coeff * (max_lr - min_lr)
-
-
 # optimize!
 optimizer = unwrapped_model.configure_optimizers(
     weight_decay=config.weight_decay,
@@ -124,29 +100,12 @@ optimizer = unwrapped_model.configure_optimizers(
     is_master_process=master_process,
 )
 
-# create the log directory we will write checkpoints to and log to
-log_dir = "log"
-os.makedirs(log_dir, exist_ok=True)
-csv_file = open(os.path.join(log_dir, f"{int(time.time())}.csv"), "w")
-csv_writer = csv.DictWriter(
-    csv_file,
-    fieldnames=[
-        "type",
-        "step",
-        "loss",
-        "lr",
-        "norm",
-        "dt",
-        "tok/sec",
-    ],
-)
-csv_writer.writeheader()
-
+torch.set_float32_matmul_precision("high")
 best_val_loss = float("inf")
 
-for step in range(max_steps):
+for step in range(config.max_steps):
     t0 = time.time()
-    last_step = step == max_steps - 1
+    last_step = step == config.max_steps - 1
 
     # once in a while evaluate our validation loss
     if step % config.eval_interval == 0 or last_step:
@@ -173,8 +132,6 @@ for step in range(max_steps):
                 "step": step,
                 "loss": round(val_loss, 6),
             }
-            csv_writer.writerow(log_data)
-            csv_file.flush()
             print(" | ".join([f"{k} {v}" for k, v in log_data.items()]))
 
             # Save the model if it's the best we've seen so far
@@ -204,7 +161,6 @@ for step in range(max_steps):
         # addition of gradients corresponds to a SUM in the objective, but
         # instead of a SUM we want MEAN. Scale the loss here so it comes out right
         ce_loss = model_output.loss / grad_accum_steps
-
         ce_loss_accum += ce_loss.detach()
 
         loss = ce_loss
@@ -219,7 +175,7 @@ for step in range(max_steps):
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip or float("inf"))
 
     # determine and set the learning rate for this iteration
-    lr = get_lr(step) if config.decay_lr else max_lr
+    lr = get_lr(step, config)
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
     optimizer.step()
@@ -239,14 +195,10 @@ for step in range(max_steps):
             "dt": round(dt, 4),
             "tok/sec": round(tokens_per_sec, 2),
         }
-        csv_writer.writerow(log_data)
-        csv_file.flush()
 
         print(" | ".join([f"{k} {v}" for k, v in log_data.items()]))
 
 if ddp:
     destroy_process_group()
-
-csv_file.close()
 
 print(f"Best validation loss: {best_val_loss}")

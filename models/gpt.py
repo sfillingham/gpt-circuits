@@ -2,7 +2,6 @@ import dataclasses
 import inspect
 import json
 import os
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -10,12 +9,7 @@ from safetensors.torch import load_model, save_model
 from torch.nn import functional as F
 
 from config.gpt import GPTConfig
-
-
-@dataclass
-class ModelOutput:
-    logits: torch.Tensor
-    loss: torch.Tensor = torch.Tensor()
+from models import ModelOutput
 
 
 class CausalSelfAttention(nn.Module):
@@ -80,7 +74,7 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
 
