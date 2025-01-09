@@ -79,7 +79,7 @@ if ddp:
 unwrapped_model = model.module if ddp else model  # always contains the "raw" unwrapped model
 
 B = config.batch_size  # micro batch size
-T = model.config.block_size  # sequence length
+T = model.config.gpt_config.block_size  # sequence length
 grad_accum_steps = config.gradient_accumulation_steps
 
 assert grad_accum_steps % ddp_world_size == 0, "make sure grad_accum_steps is divisible by ddp_world_size"

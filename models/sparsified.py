@@ -144,7 +144,7 @@ class SparsifiedGPT(nn.Module):
         Maps the SAE variant to the actual class.
         """
         match config.sae_variant:
-            case SAEVariant.GATED_V2.value:
+            case SAEVariant.GATED_V2:
                 return GatedSAE_V2
             case _:
                 raise ValueError(f"Unrecognized SAE variant: {self.sae_variant}")
