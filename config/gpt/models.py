@@ -1,18 +1,18 @@
 from dataclasses import dataclass
 
-from config import ConfigBase, map_options
-from data.tokenizers import ASCIITokenizer, BaseTokenizer, TikTokenTokenizer
+from config import Config, map_options
+from data.tokenizers import ASCIITokenizer, TikTokenTokenizer, Tokenizer
 
 
 @dataclass
-class GPTConfig(ConfigBase):
+class GPTConfig(Config):
     block_size: int = 0  # max sequence length
     vocab_size: int = 0  # number of tokens
     n_layer: int = 0  # number of layers
     n_head: int = 0  # number of heads
     n_embd: int = 0  # embedding dimension
 
-    def tokenizer(self) -> BaseTokenizer:
+    def tokenizer(self) -> Tokenizer:
         """
         Infer tokenizer from vocabulary size.
         """

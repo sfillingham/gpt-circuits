@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from config import TrainingConfigBase, map_options
+from config import TrainingConfig, map_options
 
 from .models import SAEConfig, sae_options
 
@@ -12,7 +12,7 @@ class LossCoefficients:
 
 
 @dataclass
-class SAETrainingConfig(TrainingConfigBase):
+class SAETrainingConfig(TrainingConfig):
     sae_config_name: str = ""
     trainable_layers: Optional[tuple] = None  # If none, all layers are trained.
     loss_coefficients: LossCoefficients = field(default_factory=LossCoefficients)

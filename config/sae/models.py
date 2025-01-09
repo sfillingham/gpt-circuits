@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from config import ConfigBase, map_options
+from config import Config, map_options
 from config.gpt.models import GPTConfig, gpt_options
 
 
@@ -12,7 +12,7 @@ class SAEVariant(str, Enum):
 
 
 @dataclass
-class SAEConfig(ConfigBase):
+class SAEConfig(Config):
     gpt_config_name: str = ""
     n_features: tuple = ()  # Number of features in each layer
     sae_variant: SAEVariant = SAEVariant.GATED_V2

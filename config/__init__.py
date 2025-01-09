@@ -5,11 +5,11 @@ import torch
 
 
 @dataclass
-class ConfigBase:
+class Config:
     name: str
 
     @property
-    def device(self):
+    def device(self) -> str:
         if torch.cuda.is_available():
             return "cuda"
         elif torch.backends.mps.is_available():
@@ -18,7 +18,7 @@ class ConfigBase:
             return "cpu"
 
     @property
-    def compile(self):
+    def compile(self) -> bool:
         """
         Can only compile on CUDA
         """
@@ -26,7 +26,7 @@ class ConfigBase:
 
 
 @dataclass
-class TrainingConfigBase(ConfigBase):
+class TrainingConfig(Config):
     # Data parameters
     data_dir: str = ""
     should_randomize: bool = True
@@ -56,10 +56,10 @@ class TrainingConfigBase(ConfigBase):
         return f"checkpoints/{self.name}"
 
 
-Config = TypeVar("Config", bound=ConfigBase)
+ConfigType = TypeVar("ConfigType", bound=Config)
 
 
-def map_options(*options: Config) -> dict[str, Config]:
+def map_options(*options: ConfigType) -> dict[str, ConfigType]:
     """
     Map configurations to a dictionary using name as key.
     """

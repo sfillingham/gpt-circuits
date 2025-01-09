@@ -4,10 +4,10 @@ Training helpers
 
 import math
 
-from config import TrainingConfigBase
+from config import TrainingConfig
 
 
-def get_lr(step, config: TrainingConfigBase):
+def get_lr(step, config: TrainingConfig):
     """
     Get the learning rate for a given step. Assumes that step starts at 0 and ends at max_steps - 1.
     """

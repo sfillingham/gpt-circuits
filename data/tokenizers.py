@@ -7,7 +7,7 @@ from typing import Protocol
 import tiktoken
 
 
-class BaseTokenizer(Protocol):
+class Tokenizer(Protocol):
     """
     Tokenizer interface.
     """
@@ -34,7 +34,7 @@ class BaseTokenizer(Protocol):
         ...
 
 
-class TikTokenTokenizer(BaseTokenizer):
+class TikTokenTokenizer(Tokenizer):
     """
     Tokenizer for TikToken.
     """
@@ -61,7 +61,7 @@ class TikTokenTokenizer(BaseTokenizer):
             return "".join([f"\\x{d:02x}" for d in s])
 
 
-class ASCIITokenizer(BaseTokenizer):
+class ASCIITokenizer(Tokenizer):
     """
     Tokenizer that treats each character in the input as a token.
     """

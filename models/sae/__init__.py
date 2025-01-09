@@ -46,7 +46,7 @@ class EncoderOutput:
 
 class SparseAutoencoder(Protocol):
     """
-    Base class for a sparse autoencoder.
+    Interface for a sparse autoencoder.
     """
 
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):

@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from config import TrainingConfigBase, map_options
+from config import TrainingConfig, map_options
 
 from .models import GPTConfig, gpt_options
 
 
 @dataclass
-class GPTTrainingConfig(TrainingConfigBase):
+class GPTTrainingConfig(TrainingConfig):
     gpt_config_name: str = ""
 
     @property
