@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
 
 import torch
 from torch.nn import functional as F
@@ -44,23 +43,21 @@ class EncoderOutput:
     loss: Optional[SAELossComponents] = None
 
 
-class SparseAutoencoder(ABC):
+class SparseAutoencoder(Protocol):
     """
     Base class for a sparse autoencoder.
     """
 
-    @abstractmethod
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
         """
         Initialize the sparse autoencoder.
         """
-        pass
+        ...
 
-    @abstractmethod
     def forward(self, x: torch.Tensor) -> EncoderOutput:
         """
         Forward pass of the encoder.
 
         x: input tensor (batch_size, ...)
         """
-        pass
+        ...

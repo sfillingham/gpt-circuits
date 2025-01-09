@@ -68,7 +68,7 @@ if args.load_from:
     model = SparsifiedGPT.load(args.load_from, config.loss_coefficients, device=device)
     print(f"Loaded saved model from {args.load_from}")
 else:
-    model = SparsifiedGPT(config.sae_config, config.loss_coefficients)
+    model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
     print("Initialized model from scratch")
 model = model.to(device)
 
@@ -117,7 +117,7 @@ for step in range(config.max_steps):
                 x, y = val_loader.next_batch(device)
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
                     output: SparsifiedGPTOutput = model(x, y)
-                val_loss_accum += (output.loss / val_loss_steps).detach()
+                val_loss_accum += ((output.cross_entropy_loss + output.sae_loss) / val_loss_steps).detach()
 
         if ddp:
             dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
@@ -157,7 +157,7 @@ for step in range(config.max_steps):
         # because the gradients just add on each successive backward().
         # addition of gradients corresponds to a SUM in the objective, but
         # instead of a SUM we want MEAN. Scale the loss here so it comes out right
-        loss = output.loss / grad_accum_steps
+        loss = (output.cross_entropy_loss + output.sae_loss) / grad_accum_steps
         loss_accum += loss.detach()
 
         loss.backward()

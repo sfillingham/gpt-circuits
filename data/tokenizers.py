@@ -2,12 +2,14 @@
 This module contains classes for tokenizing text.
 """
 
+from typing import Protocol
+
 import tiktoken
 
 
-class BaseTokenizer:
+class BaseTokenizer(Protocol):
     """
-    Base class for tokenizers.
+    Tokenizer interface.
     """
 
     # The size of the vocabulary.
@@ -17,19 +19,19 @@ class BaseTokenizer:
         """
         Tokenizes the input text and returns a list of token IDs.
         """
-        raise NotImplementedError()
+        ...
 
     def decode_sequence(self, tokens: list[int]) -> str:
         """
         Converts a list of token IDs to a string.
         """
-        raise NotImplementedError()
+        ...
 
     def decode_token(self, token: int) -> str:
         """
         Converts a single token ID to a string.
         """
-        raise NotImplementedError()
+        ...
 
 
 class TikTokenTokenizer(BaseTokenizer):
@@ -75,4 +77,3 @@ class ASCIITokenizer(BaseTokenizer):
 
     def decode_token(self, token: int) -> str:
         return chr(token)
-

@@ -22,18 +22,17 @@ class SparsifiedGPTOutput:
 
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
-    sae_losses: dict[int, SAELossComponents]
+    sae_loss_components: dict[int, SAELossComponents]
 
     @property
-    def mean_sae_loss(self) -> torch.Tensor:
-        reconstruct_losses = torch.stack([loss.reconstruct for loss in self.sae_losses.values()])
-        sparsity_losses = torch.stack([loss.sparsity for loss in self.sae_losses.values()])
-        aux_losses = torch.stack([loss.aux for loss in self.sae_losses.values()])
+    def sae_loss(self) -> torch.Tensor:
+        """
+        Mean SAE loss across all trainable SAE layers.
+        """
+        reconstruct_losses = torch.stack([loss.reconstruct for loss in self.sae_loss_components.values()])
+        sparsity_losses = torch.stack([loss.sparsity for loss in self.sae_loss_components.values()])
+        aux_losses = torch.stack([loss.aux for loss in self.sae_loss_components.values()])
         return (reconstruct_losses + sparsity_losses + aux_losses).mean()
-
-    @property
-    def loss(self) -> torch.Tensor:
-        return self.cross_entropy_loss + self.mean_sae_loss
 
 
 class SparsifiedGPT(nn.Module):
@@ -41,7 +40,12 @@ class SparsifiedGPT(nn.Module):
     GPT Model with sparsified activations using sparse autoencoders.
     """
 
-    def __init__(self, config: SAEConfig, loss_coefficients: Optional[LossCoefficients] = None):
+    def __init__(
+        self,
+        config: SAEConfig,
+        loss_coefficients: Optional[LossCoefficients] = None,
+        trainable_layers: Optional[tuple] = None,
+    ):
         super().__init__()
         self.config = config
         self.loss_coefficients = loss_coefficients
@@ -49,12 +53,12 @@ class SparsifiedGPT(nn.Module):
 
         # Construct sae layers
         sae_class = self.get_sae_class(config)
-        target_layers = list(range(len(config.n_features)))
-        self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in target_layers]))
+        layers_to_load = trainable_layers if trainable_layers else list(range(len(config.n_features)))
+        self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in layers_to_load]))
 
         # Add pre-hooks
         self.hooks = {}
-        for layer_idx in target_layers:
+        for layer_idx in layers_to_load:
             target = self.get_pre_hook_target(layer_idx)
             self.hooks[layer_idx] = target.register_forward_pre_hook(self.create_pre_hook(layer_idx))
 
@@ -69,7 +73,7 @@ class SparsifiedGPT(nn.Module):
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
-            sae_losses={layer_idx: output.loss for layer_idx, output in self.encoder_outputs.items() if output.loss},
+            sae_loss_components={i: output.loss for i, output in self.encoder_outputs.items() if output.loss},
         )
 
     def get_pre_hook_target(self, layer_idx) -> nn.Module:
@@ -95,7 +99,7 @@ class SparsifiedGPT(nn.Module):
         return hook
 
     @classmethod
-    def load(cls, dir, loss_coefficients=None, device="cpu"):
+    def load(cls, dir, loss_coefficients=None, trainable_layers=None, device="cpu"):
         """
         Load a sparsified GPT model from a directory.
         """
@@ -105,7 +109,7 @@ class SparsifiedGPT(nn.Module):
             meta = json.load(f)
 
         # Create model using saved config
-        model = SparsifiedGPT(SAEConfig(**meta["config"]), loss_coefficients)
+        model = SparsifiedGPT(SAEConfig(**meta["config"]), loss_coefficients, trainable_layers)
 
         # Load GPT weights
         model.gpt = GPT.load(dir, device=device)

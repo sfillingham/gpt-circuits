@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 from config import ConfigBase, TrainingConfigBase
 from config.gpt import GPTConfig, gpt_options
@@ -47,6 +48,7 @@ class LossCoefficients:
 @dataclass
 class TrainingConfig(TrainingConfigBase):
     sae_config_name: str = ""
+    trainable_layers: Optional[tuple] = None  # If none, all layers are trained.
     loss_coefficients: LossCoefficients = field(default_factory=LossCoefficients)
 
     @property
@@ -72,6 +74,8 @@ training_options: dict[str, TrainingConfig] = {
         max_steps=7500,
         decay_lr=True,
         min_lr=1e-4,
-        loss_coefficients=LossCoefficients(l1=(0.5, 1.5, 1.5, 4.0, 9.0)),
+        loss_coefficients=LossCoefficients(
+            l1=(0.5, 1.5, 1.5, 4.0, 9.0),
+        ),
     ),
 }
