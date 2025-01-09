@@ -42,7 +42,7 @@ class LossCoefficients:
 
 
 @dataclass
-class TrainingConfig(TrainingConfigBase):
+class SAETrainingConfig(TrainingConfigBase):
     sae_config_name: str = ""
     trainable_layers: Optional[tuple] = None  # If none, all layers are trained.
     loss_coefficients: LossCoefficients = field(default_factory=LossCoefficients)
@@ -56,8 +56,8 @@ class TrainingConfig(TrainingConfigBase):
 
 
 # Training configuration options
-training_options: dict[str, TrainingConfig] = {
-    "gated_v2_shakespeare_64x4": TrainingConfig(
+sae_training_options: dict[str, SAETrainingConfig] = {
+    "gated_v2_shakespeare_64x4": SAETrainingConfig(
         sae_config_name="gated_v2_shakespeare_64x4",
         out_dir="checkpoints/gated_v2_shakespeare_64x4",
         data_dir="data/shakespeare",

@@ -71,7 +71,7 @@ class GPTTrainingConfig(TrainingConfigBase):
 
 
 # Training configuration options
-training_options: dict[str, GPTTrainingConfig] = {
+gpt_training_options: dict[str, GPTTrainingConfig] = {
     "shakespeare_64x4": GPTTrainingConfig(
         gpt_config_name="ascii_64x4",
         out_dir="checkpoints/shakespeare_64x4",

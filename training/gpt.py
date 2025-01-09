@@ -15,7 +15,7 @@ import torch.distributed as dist
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from config.gpt import training_options
+from config.gpt import gpt_training_options
 from data.dataloaders import DataLoaderLite
 from models.gpt import GPT
 from training import get_lr
@@ -27,7 +27,7 @@ args = parser.parse_args()
 
 # Load configuration
 config_name = args.config
-config = training_options[config_name]
+config = gpt_training_options[config_name]
 
 
 # set up DDP (distributed data parallel).
