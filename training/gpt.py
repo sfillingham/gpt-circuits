@@ -17,7 +17,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from config.gpt import training_options
 from data.dataloaders import DataLoaderLite
-from models import ModelOutput
 from models.gpt import GPT
 from training import get_lr
 
@@ -112,18 +111,16 @@ for step in range(config.max_steps):
         model.eval()
         val_loader.reset()
         with torch.no_grad():
-            val_ce_loss_accum = torch.tensor(0.0, device=device)
+            val_loss_accum = torch.tensor(0.0, device=device)
             val_loss_steps = config.eval_steps
             for _ in range(val_loss_steps):
                 x, y = val_loader.next_batch(device)
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    model_output: ModelOutput = model(x, y)
-                val_ce_loss_accum += (model_output.loss / val_loss_steps).detach()
+                    _, loss = model(x, y)
+                val_loss_accum += (loss / val_loss_steps).detach()
 
         if ddp:
-            dist.all_reduce(val_ce_loss_accum, op=dist.ReduceOp.AVG)
-
-        val_loss_accum = val_ce_loss_accum
+            dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
 
         if master_process:
             val_loss = val_loss_accum.item()
@@ -143,7 +140,7 @@ for step in range(config.max_steps):
     # do one step of the optimization
     model.train()
     optimizer.zero_grad()
-    ce_loss_accum = torch.tensor(0.0, device=device)
+    loss_accum = torch.tensor(0.0, device=device)
     for micro_step in range(grad_accum_steps):
         x, y = train_loader.next_batch(device)
         x, y = x.to(device), y.to(device)
@@ -154,22 +151,19 @@ for step in range(config.max_steps):
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = micro_step == grad_accum_steps - 1  # type: ignore
         with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-            model_output: ModelOutput = model(x, y)
+            _, loss = model(x, y)
 
         # we have to scale the loss to account for gradient accumulation,
         # because the gradients just add on each successive backward().
         # addition of gradients corresponds to a SUM in the objective, but
         # instead of a SUM we want MEAN. Scale the loss here so it comes out right
-        ce_loss = model_output.loss / grad_accum_steps
-        ce_loss_accum += ce_loss.detach()
+        loss = loss / grad_accum_steps
+        loss_accum += loss.detach()
 
-        loss = ce_loss
         loss.backward()
 
     if ddp:
-        dist.all_reduce(ce_loss_accum, op=dist.ReduceOp.AVG)
-
-    loss_accum = ce_loss_accum
+        dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 
     # clip the gradients (if a grad clip value is provided)
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip or float("inf"))

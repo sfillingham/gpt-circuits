@@ -1,8 +1,11 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from models.sae import EncoderOutput, SparseAutoencoder
+from config.sae import LossCoefficients, SAEConfig
+from models.sae.base import EncoderOutput, SparseAutoencoder
 
 
 class BaseGatedSAE(SparseAutoencoder):
@@ -11,18 +14,18 @@ class BaseGatedSAE(SparseAutoencoder):
     https://arxiv.org/abs/2404.16014
     """
 
-    def __init__(self, config, layer_idx):
+    def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
         """
         n_embd: GPT embedding size.
         F: SAE dictionary size.
         """
-        super().__init__()
+        super().__init__(layer_idx, config, loss_coefficients)
         F = config.n_features[layer_idx]
-        self.l1_coefficient = config.l1_coefficients[layer_idx]
-        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, config.n_embd)))
+        self.l1_coefficient = loss_coefficients.l1[layer_idx] if loss_coefficients else None
+        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, config.gpt_config.n_embd)))
         self.b_gate = nn.Parameter(torch.zeros(F))
         self.b_mag = nn.Parameter(torch.zeros(F))
-        self.b_dec = nn.Parameter(torch.zeros(config.n_embd))
+        self.b_dec = nn.Parameter(torch.zeros(config.gpt_config.n_embd))
 
     def get_W_gate(self):
         """
@@ -62,23 +65,42 @@ class BaseGatedSAE(SparseAutoencoder):
         feature_magnitudes, pi_gate = self.encode(x)
         x_reconstructed = self.decode(feature_magnitudes)
 
-        # L2 reconstruction loss
-        reconstruction_loss = F.mse_loss(x_reconstructed, x)
+        # Do we need to compute losses?
+        if self.l1_coefficient is None:
+            return EncoderOutput(
+                x_reconstructed,
+                feature_magnitudes,
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+            )
 
-        # Use Gated (RI-L1) sparsity variant: https://arxiv.org/pdf/2407.14435
-        scaled_pi_gate = F.relu(pi_gate) * self.W_dec.data.norm(dim=1)
-        sparsity_loss = F.l1_loss(scaled_pi_gate, torch.zeros_like(pi_gate)) * self.l1_coefficient
+        else:
+            # L2 reconstruction loss
+            reconstruction_loss = F.mse_loss(x_reconstructed, x)
 
-        # compute the auxiliary loss
-        W_dec_clone = self.W_dec.clone().detach()
-        b_dec_clone = self.b_dec.clone().detach()
-        x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
-        aux_loss = F.mse_loss(x_hat_frozen, x)
+            # Use Gated (RI-L1) sparsity variant: https://arxiv.org/pdf/2407.14435
+            scaled_pi_gate = F.relu(pi_gate) * self.W_dec.data.norm(dim=1)
+            sparsity_loss = F.l1_loss(scaled_pi_gate, torch.zeros_like(pi_gate)) * self.l1_coefficient
 
-        # L0 sparsity loss
-        l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
+            # compute the auxiliary loss
+            W_dec_clone = self.W_dec.clone().detach()
+            b_dec_clone = self.b_dec.clone().detach()
+            x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
+            aux_loss = F.mse_loss(x_hat_frozen, x)
 
-        return EncoderOutput(x_reconstructed, feature_magnitudes, reconstruction_loss, sparsity_loss, aux_loss, l0)
+            # L0 sparsity loss
+            l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
+
+            return EncoderOutput(
+                x_reconstructed,
+                feature_magnitudes,
+                reconstruction_loss,
+                sparsity_loss,
+                aux_loss,
+                l0,
+            )
 
 
 class GatedSAE(BaseGatedSAE):
@@ -86,8 +108,8 @@ class GatedSAE(BaseGatedSAE):
     Standed Gated Sparse Autoencoder module (RI-L1).
     """
 
-    def __init__(self, config, layer_idx):
-        super().__init__(config, layer_idx)
+    def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
+        super().__init__(layer_idx, config, loss_coefficients)
         F = config.n_features[layer_idx]
         self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
         self.r_mag = nn.Parameter(torch.zeros(F))

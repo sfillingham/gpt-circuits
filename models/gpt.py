@@ -9,7 +9,16 @@ from safetensors.torch import load_model, save_model
 from torch.nn import functional as F
 
 from config.gpt import GPTConfig
-from models import ModelOutput
+
+
+@dataclasses.dataclass
+class ModelOutput:
+    """
+    GPT model output from forward pass.
+    """
+
+    logits: torch.Tensor
+    loss: torch.Tensor = torch.Tensor()
 
 
 class CausalSelfAttention(nn.Module):
@@ -130,12 +139,9 @@ class GPT(nn.Module):
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
 
-            return ModelOutput(
-                logits=logits,
-                loss=loss,
-            )
+            return (logits, loss)
 
-        return ModelOutput(logits=logits)
+        return (logits, None)
 
     @classmethod
     def load(cls, dir, device="cpu"):

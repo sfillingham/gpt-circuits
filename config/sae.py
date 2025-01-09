@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from config import ConfigBase, TrainingConfigBase
@@ -40,9 +40,14 @@ sae_options: dict[str, SAEConfig] = {
 
 
 @dataclass
+class LossCoefficients:
+    l1: tuple = ()
+
+
+@dataclass
 class TrainingConfig(TrainingConfigBase):
     sae_config_name: str = ""
-    l1_coefficients: tuple = ()
+    loss_coefficients: LossCoefficients = field(default_factory=LossCoefficients)
 
     @property
     def sae_config(self) -> SAEConfig:
@@ -63,10 +68,10 @@ training_options: dict[str, TrainingConfig] = {
         batch_size=128,
         gradient_accumulation_steps=1,
         learning_rate=1e-3,
-        warmup_steps=900,
-        max_steps=9000,
+        warmup_steps=750,
+        max_steps=7500,
         decay_lr=True,
         min_lr=1e-4,
-        l1_coefficients=(0.5, 1.5, 1.5, 4.0, 9.0),
+        loss_coefficients=LossCoefficients(l1=(0.5, 1.5, 1.5, 4.0, 9.0)),
     ),
 }
