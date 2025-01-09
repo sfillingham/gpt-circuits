@@ -15,7 +15,7 @@ import torch.distributed as dist
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from config.sae import sae_training_options
+from config.sae.training import options
 from data.dataloaders import DataLoaderLite
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training import get_lr
@@ -27,7 +27,7 @@ args = parser.parse_args()
 
 # Load configuration
 config_name = args.config
-config = sae_training_options[config_name]
+config = options[config_name]
 
 
 # set up DDP (distributed data parallel).

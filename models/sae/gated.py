@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from config.sae import LossCoefficients, SAEConfig
+from config.sae.models import SAEConfig
+from config.sae.training import LossCoefficients
 from models.sae import EncoderOutput, SAELossComponents, SparseAutoencoder
 
 

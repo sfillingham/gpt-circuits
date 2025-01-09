@@ -9,7 +9,7 @@ import torch.nn as nn
 from safetensors.torch import load_model, save_model
 from torch.nn import functional as F
 
-from config.gpt import GPTConfig
+from config.gpt.models import GPTConfig
 
 
 class CausalSelfAttention(nn.Module):

@@ -8,7 +8,8 @@ import torch
 import torch.nn as nn
 from safetensors.torch import load_model, save_model
 
-from config.sae import LossCoefficients, SAEConfig, SAEVariant
+from config.sae.models import SAEConfig, SAEVariant
+from config.sae.training import LossCoefficients
 from models.gpt import GPT
 from models.sae import EncoderOutput, SAELossComponents
 from models.sae.gated import GatedSAE_V2

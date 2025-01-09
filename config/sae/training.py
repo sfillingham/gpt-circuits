@@ -1,39 +1,9 @@
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
 
-from config import ConfigBase, TrainingConfigBase
-from config.gpt import GPTConfig, gpt_options
+from config import TrainingConfigBase
 
-
-class SAEVariant(str, Enum):
-    GATED = "gated"
-    GATED_V2 = "gated_v2"
-    JUMP_RELU = "jumprelu"
-
-
-@dataclass
-class SAEConfig(ConfigBase):
-    gpt_config_name: str = ""
-    n_features: tuple = ()  # Number of features in each layer
-    sae_variant: SAEVariant = SAEVariant.GATED_V2
-
-    @property
-    def gpt_config(self) -> GPTConfig:
-        """
-        Maps the GPT configuration name to the actual configuration.
-        """
-        return gpt_options[self.gpt_config_name]
-
-
-# SAE configuration options
-sae_options: dict[str, SAEConfig] = {
-    "gated_v2_shakespeare_64x4": SAEConfig(
-        gpt_config_name="ascii_64x4",
-        n_features=tuple(64 * n for n in (4, 4, 4, 8, 16)),
-        sae_variant=SAEVariant.GATED_V2,
-    ),
-}
+from .models import SAEConfig, sae_options
 
 
 @dataclass
@@ -49,14 +19,11 @@ class SAETrainingConfig(TrainingConfigBase):
 
     @property
     def sae_config(self) -> SAEConfig:
-        """
-        Maps the SAE configuration name to the actual configuration.
-        """
         return sae_options[self.sae_config_name]
 
 
 # Training configuration options
-sae_training_options: dict[str, SAETrainingConfig] = {
+options: dict[str, SAETrainingConfig] = {
     "gated_v2_shakespeare_64x4": SAETrainingConfig(
         sae_config_name="gated_v2_shakespeare_64x4",
         out_dir="checkpoints/gated_v2_shakespeare_64x4",
