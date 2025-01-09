@@ -5,81 +5,65 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from config.sae import LossCoefficients, SAEConfig
-from models.sae.base import EncoderOutput, SparseAutoencoder
+from models.sae import EncoderOutput, SAELossComponents, SparseAutoencoder
 
 
-class BaseGatedSAE(SparseAutoencoder):
+class GatedSAE(nn.Module, SparseAutoencoder):
     """
-    Gated Sparse Autoencoder module.
+    Gated sparse autoencoder with RI-L1 sparsity penalty
     https://arxiv.org/abs/2404.16014
+    https://arxiv.org/html/2407.14435v3
     """
 
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
-        """
-        n_embd: GPT embedding size.
-        F: SAE dictionary size.
-        """
-        super().__init__(layer_idx, config, loss_coefficients)
-        F = config.n_features[layer_idx]
+        super().__init__()
+        F = config.n_features[layer_idx]  # SAE dictionary size.
+        n_embd = config.gpt_config.n_embd  # GPT embedding size.
         self.l1_coefficient = loss_coefficients.l1[layer_idx] if loss_coefficients else None
-        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, config.gpt_config.n_embd)))
+        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, n_embd)))
         self.b_gate = nn.Parameter(torch.zeros(F))
         self.b_mag = nn.Parameter(torch.zeros(F))
-        self.b_dec = nn.Parameter(torch.zeros(config.gpt_config.n_embd))
+        self.b_dec = nn.Parameter(torch.zeros(n_embd))
 
-    def get_W_gate(self):
-        """
-        To be implemented by derived classes.
-        """
-        raise NotImplementedError()
-
-    def get_W_mag(self):
-        """
-        To be implemented by derived classes.
-        """
-        raise NotImplementedError()
+        try:
+            # NOTE: Subclass might define these using properties.
+            self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
+            self.r_mag = nn.Parameter(torch.zeros(F))
+        except KeyError:
+            pass
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        x: GPT model activations (batch_size, n_embd)
+        """
         x_centered = x - self.b_dec
-        pi_gate = x_centered @ self.get_W_gate() + self.b_gate
+        pi_gate = x_centered @ self.W_gate + self.b_gate
 
         f_gate = (pi_gate > 0).float()  # whether to gate the feature
-        f_mag = F.relu(x_centered @ self.get_W_mag() + self.b_mag)  # feature magnitudes
+        W_mag = self.W_gate * torch.exp(self.r_mag)
+        f_mag = F.relu(x_centered @ W_mag + self.b_mag)  # feature magnitudes
 
-        x_encoded = f_gate * f_mag
+        feature_magnitudes = f_gate * f_mag
+        return feature_magnitudes, pi_gate
 
-        return x_encoded, pi_gate
-
-    def decode(self, x: torch.Tensor):
+    def decode(self, feature_magnitudes: torch.Tensor):
         """
-        x: SAE activations (batch_size, F)
+        feature_magnitudes: SAE activations (batch_size, F)
         """
-        return x @ self.W_dec + self.b_dec
+        return feature_magnitudes @ self.W_dec + self.b_dec
 
     def forward(self, x: torch.Tensor) -> EncoderOutput:
         """
-        Returns (i) a reconstruction of GPT model activations, (ii) the SAE activations, and (iii) SAE loss components.
+        Returns a reconstruction of GPT model activations and feature magnitudes.
+        Also return loss components if loss coefficients are provided.
 
         x: GPT model activations (batch_size, n_embd)
         """
         feature_magnitudes, pi_gate = self.encode(x)
         x_reconstructed = self.decode(feature_magnitudes)
+        output = EncoderOutput(x_reconstructed, feature_magnitudes)
 
-        # Do we need to compute losses?
-        if self.l1_coefficient is None:
-            return EncoderOutput(
-                x_reconstructed,
-                feature_magnitudes,
-                torch.tensor(0.0),
-                torch.tensor(0.0),
-                torch.tensor(0.0),
-                torch.tensor(0.0),
-            )
-
-        else:
-            # L2 reconstruction loss
-            reconstruction_loss = F.mse_loss(x_reconstructed, x)
-
+        if self.l1_coefficient:
             # Use Gated (RI-L1) sparsity variant: https://arxiv.org/pdf/2407.14435
             scaled_pi_gate = F.relu(pi_gate) * self.W_dec.data.norm(dim=1)
             sparsity_loss = F.l1_loss(scaled_pi_gate, torch.zeros_like(pi_gate)) * self.l1_coefficient
@@ -90,51 +74,27 @@ class BaseGatedSAE(SparseAutoencoder):
             x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
             aux_loss = F.mse_loss(x_hat_frozen, x)
 
-            # L0 sparsity loss
-            l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
+            output.loss = SAELossComponents(x, x_reconstructed, feature_magnitudes, sparsity_loss, aux_loss)
 
-            return EncoderOutput(
-                x_reconstructed,
-                feature_magnitudes,
-                reconstruction_loss,
-                sparsity_loss,
-                aux_loss,
-                l0,
-            )
+        return output
 
 
-class GatedSAE(BaseGatedSAE):
-    """
-    Standed Gated Sparse Autoencoder module (RI-L1).
-    """
-
-    def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
-        super().__init__(layer_idx, config, loss_coefficients)
-        F = config.n_features[layer_idx]
-        self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
-        self.r_mag = nn.Parameter(torch.zeros(F))
-
-    def get_W_gate(self):
-        return self.W_gate
-
-    def get_W_mag(self):
-        return self.get_W_gate() * torch.exp(self.r_mag)
-
-
-class GatedSAE_V2(BaseGatedSAE):
+class GatedSAE_V2(GatedSAE):
     """
     Experimental Gated Sparse Autoencoder module that ties the encoder and decoder weights to avoid feature absorption.
     Reference: https://www.lesswrong.com/posts/kcg58WhRxFA9hv9vN
     """
 
-    def get_W_gate(self):
+    @property
+    def W_gate(self):
         """
         Tying encoder weights to decoder weights.
         """
         return self.W_dec.t()
 
-    def get_W_mag(self):
+    @property
+    def r_mag(self):
         """
         The r_mag scaler doesn't seem useful after weights are tied.
         """
-        return self.get_W_gate()
+        return torch.zeros_like(self.b_mag)

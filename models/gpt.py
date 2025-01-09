@@ -2,6 +2,7 @@ import dataclasses
 import inspect
 import json
 import os
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -9,16 +10,6 @@ from safetensors.torch import load_model, save_model
 from torch.nn import functional as F
 
 from config.gpt import GPTConfig
-
-
-@dataclasses.dataclass
-class ModelOutput:
-    """
-    GPT model output from forward pass.
-    """
-
-    logits: torch.Tensor
-    loss: torch.Tensor = torch.Tensor()
 
 
 class CausalSelfAttention(nn.Module):
@@ -117,7 +108,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         # idx is of shape (B, T)
         B, T = idx.size()
         assert (

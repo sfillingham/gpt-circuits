@@ -10,7 +10,7 @@ from safetensors.torch import load_model, save_model
 
 from config.sae import LossCoefficients, SAEConfig, SAEVariant
 from models.gpt import GPT
-from models.sae.base import EncoderOutput
+from models.sae import EncoderOutput, SAELossComponents
 from models.sae.gated import GatedSAE_V2
 
 
@@ -21,19 +21,19 @@ class SparsifiedGPTOutput:
     """
 
     logits: torch.Tensor
-    ce_loss: torch.Tensor
-    sae_reconstruct_losses: torch.Tensor
-    sae_sparsity_losses: torch.Tensor
-    sae_aux_losses: torch.Tensor
-    sae_l0_losses: torch.Tensor
+    cross_entropy_loss: torch.Tensor
+    sae_losses: dict[int, SAELossComponents]
 
     @property
-    def sae_loss(self) -> torch.Tensor:
-        return (self.sae_reconstruct_losses + self.sae_sparsity_losses + self.sae_aux_losses).mean()
+    def mean_sae_loss(self) -> torch.Tensor:
+        reconstruct_losses = torch.stack([loss.reconstruct for loss in self.sae_losses.values()])
+        sparsity_losses = torch.stack([loss.sparsity for loss in self.sae_losses.values()])
+        aux_losses = torch.stack([loss.aux for loss in self.sae_losses.values()])
+        return (reconstruct_losses + sparsity_losses + aux_losses).mean()
 
     @property
     def loss(self) -> torch.Tensor:
-        return self.ce_loss + self.sae_loss
+        return self.cross_entropy_loss + self.mean_sae_loss
 
 
 class SparsifiedGPT(nn.Module):
@@ -66,18 +66,10 @@ class SparsifiedGPT(nn.Module):
         self.encoder_outputs: dict[int, EncoderOutput] = {}
         logits, cross_entropy_loss = self.gpt(idx, targets)
 
-        sae_reconstruct_losses = torch.stack([output.reconstruct_loss for output in self.encoder_outputs.values()])
-        sae_sparsity_losses = torch.stack([output.sparsity_loss for output in self.encoder_outputs.values()])
-        sae_aux_losses = torch.stack([output.aux_loss for output in self.encoder_outputs.values()])
-        sae_l0_losses = torch.stack([output.l0 for output in self.encoder_outputs.values()])
-
         return SparsifiedGPTOutput(
             logits=logits,
-            ce_loss=cross_entropy_loss,
-            sae_reconstruct_losses=sae_reconstruct_losses,
-            sae_sparsity_losses=sae_sparsity_losses,
-            sae_aux_losses=sae_aux_losses,
-            sae_l0_losses=sae_l0_losses,
+            cross_entropy_loss=cross_entropy_loss,
+            sae_losses={layer_idx: output.loss for layer_idx, output in self.encoder_outputs.items() if output.loss},
         )
 
     def get_pre_hook_target(self, layer_idx) -> nn.Module:
