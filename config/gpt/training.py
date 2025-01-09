@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from config import TrainingConfigBase
+from config import TrainingConfigBase, map_options
 
 from .models import GPTConfig, gpt_options
 
@@ -15,10 +15,10 @@ class GPTTrainingConfig(TrainingConfigBase):
 
 
 # Training configuration options
-options: dict[str, GPTTrainingConfig] = {
-    "shakespeare_64x4": GPTTrainingConfig(
+options: dict[str, GPTTrainingConfig] = map_options(
+    GPTTrainingConfig(
+        name="shakespeare_64x4",
         gpt_config_name="ascii_64x4",
-        out_dir="checkpoints/shakespeare_64x4",
         data_dir="data/shakespeare",
         eval_interval=250,
         eval_steps=100,
@@ -30,9 +30,9 @@ options: dict[str, GPTTrainingConfig] = {
         decay_lr=True,
         min_lr=1e-4,
     ),
-    "shakespeare_128x6": GPTTrainingConfig(
+    GPTTrainingConfig(
+        name="shakespeare_128x6",
         gpt_config_name="ascii_128x6",
-        out_dir="checkpoints/shakespeare_128x6",
         data_dir="data/shakespeare",
         eval_interval=250,
         eval_steps=100,
@@ -44,9 +44,9 @@ options: dict[str, GPTTrainingConfig] = {
         decay_lr=True,
         min_lr=1e-4,
     ),
-    "tiny_32x4": GPTTrainingConfig(
+    GPTTrainingConfig(
+        name="tiny_32x4",
         gpt_config_name="tiktoken_32x4",
-        out_dir="checkpoints/tiny_32x4",
         data_dir="data/tiny_stories_10m",
         eval_interval=100,
         eval_steps=100,
@@ -55,9 +55,9 @@ options: dict[str, GPTTrainingConfig] = {
         learning_rate=1e-3,
         max_steps=5000,
     ),
-    "tiny_64x2": GPTTrainingConfig(
+    GPTTrainingConfig(
+        name="tiny_64x2",
         gpt_config_name="tiktoken_64x2",
-        out_dir="checkpoints/tiny_64x2",
         data_dir="data/tiny_stories_10m",
         eval_interval=100,
         eval_steps=100,
@@ -66,4 +66,4 @@ options: dict[str, GPTTrainingConfig] = {
         learning_rate=1e-3,
         max_steps=5000,
     ),
-}
+)

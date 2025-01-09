@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from config import TrainingConfigBase
+from config import TrainingConfigBase, map_options
 
 from .models import SAEConfig, sae_options
 
@@ -23,10 +23,10 @@ class SAETrainingConfig(TrainingConfigBase):
 
 
 # Training configuration options
-options: dict[str, SAETrainingConfig] = {
-    "gated_v2_shakespeare_64x4": SAETrainingConfig(
+options: dict[str, SAETrainingConfig] = map_options(
+    SAETrainingConfig(
+        name="gated_v2_shakespeare_64x4",
         sae_config_name="gated_v2_shakespeare_64x4",
-        out_dir="checkpoints/gated_v2_shakespeare_64x4",
         data_dir="data/shakespeare",
         eval_interval=250,
         eval_steps=100,
@@ -41,4 +41,4 @@ options: dict[str, SAETrainingConfig] = {
             l1=(0.5, 1.5, 1.5, 4.0, 9.0),
         ),
     ),
-}
+)

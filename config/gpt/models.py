@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from config import ConfigBase
+from config import ConfigBase, map_options
 from data.tokenizers import ASCIITokenizer, BaseTokenizer, TikTokenTokenizer
 
 
@@ -26,33 +26,37 @@ class GPTConfig(ConfigBase):
 
 
 # GPT configuration options
-gpt_options: dict[str, GPTConfig] = {
-    "ascii_64x4": GPTConfig(
+gpt_options: dict[str, GPTConfig] = map_options(
+    GPTConfig(
+        name="ascii_64x4",
         block_size=128,
         vocab_size=ASCIITokenizer.vocab_size,
         n_layer=4,
         n_head=4,
         n_embd=64,
     ),
-    "ascii_128x6": GPTConfig(
+    GPTConfig(
+        name="ascii_128x6",
         block_size=128,
         vocab_size=ASCIITokenizer.vocab_size,
         n_layer=6,
         n_head=4,
         n_embd=128,
     ),
-    "tiktoken_32x4": GPTConfig(
+    GPTConfig(
+        name="tiktoken_32x4",
         block_size=128,
         vocab_size=TikTokenTokenizer.vocab_size,
         n_layer=4,
         n_head=16,
         n_embd=32,
     ),
-    "tiktoken_64x2": GPTConfig(
+    GPTConfig(
+        name="tiktoken_64x2",
         block_size=128,
         vocab_size=TikTokenTokenizer.vocab_size,
         n_layer=2,
         n_head=16,
         n_embd=64,
     ),
-}
+)

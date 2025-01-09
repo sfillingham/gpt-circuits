@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from config import ConfigBase
+from config import ConfigBase, map_options
 from config.gpt.models import GPTConfig, gpt_options
 
 
@@ -23,10 +23,11 @@ class SAEConfig(ConfigBase):
 
 
 # SAE configuration options
-sae_options: dict[str, SAEConfig] = {
-    "gated_v2_shakespeare_64x4": SAEConfig(
+sae_options: dict[str, SAEConfig] = map_options(
+    SAEConfig(
+        name="gated_v2_shakespeare_64x4",
         gpt_config_name="ascii_64x4",
         n_features=tuple(64 * n for n in (4, 4, 4, 8, 16)),
         sae_variant=SAEVariant.GATED_V2,
     ),
-}
+)
