@@ -1,5 +1,5 @@
 """
-GPT-2 model. Implementation adopted from: https://github.com/karpathy/build-nanogpt
+GPT-2 model. Adopted from: https://github.com/karpathy/build-nanogpt
 """
 
 import dataclasses

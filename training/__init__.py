@@ -1,5 +1,5 @@
 """
-Trainer interface. Implementation adopted from: https://github.com/karpathy/build-nanogpt
+Trainer interface. Adopted from: https://github.com/karpathy/build-nanogpt
 """
 
 import inspect
@@ -233,7 +233,7 @@ class Trainer(Protocol):
 
             # Save the model if it's the best we've seen so far
             self.best_val_loss = min(self.best_val_loss, loss_accum.item())
-            if self.best_val_loss == loss and step > 1:
+            if self.best_val_loss == loss_accum.item() and step > 1:
                 print("Saving checkpoint")
                 self.unwrapped_model.save(self.config.out_dir)
 

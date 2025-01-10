@@ -1,6 +1,8 @@
 import dataclasses
 import json
 import os
+from collections import defaultdict
+from contextlib import contextmanager
 from typing import Optional
 
 import torch
@@ -54,31 +56,52 @@ class SparsifiedGPT(nn.Module):
 
         # Construct sae layers
         sae_class = self.get_sae_class(config)
-        layers_to_load = trainable_layers if trainable_layers else list(range(len(config.n_features)))
-        self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in layers_to_load]))
-
-        # Add pre-hooks
-        self.hooks = {}
-        for layer_idx in layers_to_load:
-            target = self.get_pre_hook_target(layer_idx)
-            self.hooks[layer_idx] = target.register_forward_pre_hook(self.create_pre_hook(layer_idx))
+        self.layer_idxs = trainable_layers if trainable_layers else list(range(len(config.n_features)))
+        self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in self.layer_idxs]))
 
     def forward(self, idx, targets=None) -> SparsifiedGPTOutput:
         """
         Forward pass of the sparsified model.
         """
         # Encoders states are stored in `encoder_outputs` using hooks.
-        self.encoder_outputs: dict[int, EncoderOutput] = {}
-        logits, cross_entropy_loss = self.gpt(idx, targets)
+        self.encoder_outputs = {}
+        with self.use_saes() as encoder_outputs:
+            logits, cross_entropy_loss = self.gpt(idx, targets)
 
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
-            ce_loss_increases=torch.full((len(self.encoder_outputs.keys()),), 0.0001, device=logits.device),
-            sae_loss_components={i: output.loss for i, output in self.encoder_outputs.items() if output.loss},
+            ce_loss_increases=torch.full((len(encoder_outputs.keys()),), 0.0001, device=logits.device),
+            sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
         )
 
-    def get_pre_hook_target(self, layer_idx) -> nn.Module:
+    @contextmanager
+    def use_saes(self):
+        """
+        Context manager for using SAE layers during the forward pass.
+        """
+        # Dictionary for storing results
+        encoder_outputs: dict[int, EncoderOutput] = {}
+
+        # Register hooks
+        hooks = []
+        for layer_idx in self.layer_idxs:
+            target = self.get_hook_target(layer_idx)
+            sae = self.saes[f"{layer_idx}"]
+            # Output values will be overwritten (hack to pass object by reference)
+            output = EncoderOutput(torch.tensor(0), torch.tensor(0))
+            hooks.append(target.register_forward_pre_hook(self.create_hook(sae, output)))
+            encoder_outputs[layer_idx] = output
+
+        try:
+            yield encoder_outputs
+
+        finally:
+            # Unregister hooks
+            for hook in hooks:
+                hook.remove()
+
+    def get_hook_target(self, layer_idx) -> nn.Module:
         """
         SAE layer -> Targeted named module for forward pre-hook.
         """
@@ -88,15 +111,18 @@ class SparsifiedGPT(nn.Module):
             return self.gpt.get_submodule("transformer.ln_f")
         raise ValueError(f"Invalid layer index: {layer_idx}")
 
-    def create_pre_hook(self, layer_idx):
+    def create_hook(self, sae, output):
         """
         Create a forward pre-hook for the given layer index.
+
+        :param sae: SAE module to use for the forward pass.
+        :param output: Encoder output to be updated.
         """
 
-        def hook(module, inputs):
+        def hook(_, inputs):
             x = inputs[0]
-            sae = self.saes[f"{layer_idx}"]
-            self.encoder_outputs[layer_idx] = sae(x)
+            # Override field values instead of replacing reference
+            output.__dict__ = sae(x).__dict__
 
         return hook
 
