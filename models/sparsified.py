@@ -22,6 +22,7 @@ class SparsifiedGPTOutput:
 
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
+    ce_loss_increases: torch.Tensor
     sae_loss_components: dict[int, SAELossComponents]
 
     @property
@@ -73,6 +74,7 @@ class SparsifiedGPT(nn.Module):
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
+            ce_loss_increases=torch.full((len(self.encoder_outputs.keys()),), 0.0001, device=logits.device),
             sae_loss_components={i: output.loss for i, output in self.encoder_outputs.items() if output.loss},
         )
 

@@ -45,7 +45,7 @@ class GPTTrainer(Trainer):
 
         super().__init__(model, config)
 
-    def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict]]:
+    def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Calculate model loss.
         """

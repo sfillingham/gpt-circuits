@@ -6,6 +6,7 @@ import inspect
 import math
 import os
 import time
+from collections import defaultdict
 from typing import Optional, Protocol
 
 import torch
@@ -43,13 +44,14 @@ class Trainer(Protocol):
         self.ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
         if self.ddp:
             # use of DDP atm demands CUDA, we set the device appropriately according to rank
-            assert torch.cuda.is_available()
-            torch.cuda.set_device(self.device)
             self.ddp_rank = int(os.environ["RANK"])
             self.ddp_local_rank = int(os.environ["LOCAL_RANK"])
             self.ddp_world_size = int(os.environ["WORLD_SIZE"])
             self.device = torch.device(f"cuda:{self.ddp_local_rank}")
             self.is_master_process = self.ddp_rank == 0  # this process will do logging, checkpointing etc.
+
+            assert torch.cuda.is_available()
+            torch.cuda.set_device(self.device)
         else:
             # vanilla, non-DDP run
             self.ddp_rank = 0
@@ -88,7 +90,7 @@ class Trainer(Protocol):
             split="val",
         )
 
-    def calculate_loss(self, x, y, is_eval: bool) -> tuple[torch.Tensor, Optional[dict]]:
+    def calculate_loss(self, x, y, is_eval: bool) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Returns a tuple of (loss, metrics).
         Metrics are ignored during training but are logged during evaluation.
@@ -162,35 +164,52 @@ class Trainer(Protocol):
         if self.ddp:
             distributed.destroy_process_group()
 
+    @torch.no_grad()
     def val_step(self, step):
         """
         Perform one step of validation.
         """
         self.model.eval()
         self.val_dataloader.reset()
-        with torch.no_grad():
-            loss_accum = torch.tensor(0.0, device=self.device)
-            for _ in range(self.config.eval_steps):
-                x, y = self.val_dataloader.next_batch(self.device)
-                with torch.autocast(device_type=self.autocast_device_type, dtype=torch.bfloat16):
-                    loss, metrics = self.calculate_loss(x, y, is_eval=True)
-                loss_accum += (loss / self.config.eval_steps).detach()
+        loss_accum = torch.tensor(0.0, device=self.device)
+        metrics_accum: dict[str, torch.Tensor] = defaultdict(lambda: torch.tensor(0.0, device=self.device))
+        for _ in range(self.config.eval_steps):
+            x, y = self.val_dataloader.next_batch(self.device)
+            with torch.autocast(device_type=self.autocast_device_type, dtype=torch.bfloat16):
+                loss, metrics = self.calculate_loss(x, y, is_eval=True)
+
+            # Accumulate loss
+            loss_accum += loss / self.config.eval_steps
+
+            # Accumulate metrics
+            metrics = metrics or {}
+            for k, v in metrics.items():
+                metrics_accum[k] = metrics_accum[k] + v / self.config.eval_steps
 
         if self.ddp:
             distributed.all_reduce(loss_accum, op=distributed.ReduceOp.AVG)
 
+            # TODO: Does this work?
+            for k, v in metrics_accum.items():
+                distributed.all_reduce(v, op=distributed.ReduceOp.AVG)
+
         if self.is_master_process:
-            loss = loss_accum.item()
+            # Round metrics
+            rounded_metrics = {}
+            for k, v in (metrics_accum or {}).items():
+                rounded_metrics[k] = [round(t.item(), 4) for t in v] if v.numel() > 1 else round(v.item(), 4)
+
+            # Log metrics
             self.log_metrics(
                 {
                     "type": "eval",
-                    "loss": f"{loss:.4f}",
-                    **(metrics or {}),
+                    "loss": f"{loss_accum.item():.4f}",
+                    **rounded_metrics,
                 }
             )
 
             # Save the model if it's the best we've seen so far
-            self.best_val_loss = min(self.best_val_loss, loss)
+            self.best_val_loss = min(self.best_val_loss, loss_accum.item())
             if self.best_val_loss == loss and step > 1:
                 print("Saving checkpoint")
                 self.unwrapped_model.save(self.config.out_dir)

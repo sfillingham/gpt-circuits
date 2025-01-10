@@ -8,7 +8,6 @@ from config.gpt.models import GPTConfig, gpt_options
 class SAEVariant(str, Enum):
     GATED = "gated"
     GATED_V2 = "gated_v2"
-    JUMP_RELU = "jumprelu"
 
 
 @dataclass

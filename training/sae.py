@@ -46,7 +46,7 @@ class SAETrainer(Trainer):
 
         super().__init__(model, config)
 
-    def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict]]:
+    def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Calculate model loss.
         """
@@ -57,8 +57,9 @@ class SAETrainer(Trainer):
         # Only include metrics if in evaluation mode
         if is_eval:
             metrics = {
-                "ce_loss": f"{output.cross_entropy_loss:.4f}",
-                "sae_loss": f"{output.sae_loss:.4f}",
+                "ce_loss": output.cross_entropy_loss,
+                "sae_loss": output.sae_loss,
+                "ce_loss_increases": output.ce_loss_increases,
             }
 
         return loss, metrics
