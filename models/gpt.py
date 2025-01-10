@@ -1,3 +1,7 @@
+"""
+GPT-2 model. Implementation adopted from: https://github.com/karpathy/build-nanogpt
+"""
+
 import dataclasses
 import json
 import os

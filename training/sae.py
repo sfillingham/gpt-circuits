@@ -78,7 +78,7 @@ class SAETrainer(Trainer):
         num_sae_params = sum(p.numel() for p in sae_params)
 
         # Print number of parameters
-        if self.is_master_process:
+        if self.is_main_process:
             print(f"Num GPT parameters: {num_gpt_params:,}")
             print(f"Num SAE parameters: {num_sae_params:,}")
         param_groups = gpt_param_groups + [{"params": sae_params, "weight_decay": 0.0}]

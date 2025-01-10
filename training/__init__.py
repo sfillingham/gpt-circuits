@@ -1,5 +1,5 @@
 """
-Training helpers
+Trainer interface. Implementation adopted from: https://github.com/karpathy/build-nanogpt
 """
 
 import inspect
@@ -30,7 +30,6 @@ class Trainer(Protocol):
     ddp_local_rank: int
     ddp_world_size: int
     device: torch.device
-    is_master_process: bool
     model: nn.Module
     optimizer: Optimizer
     train_dataloader: DataLoaderLite
@@ -48,7 +47,6 @@ class Trainer(Protocol):
             self.ddp_local_rank = int(os.environ["LOCAL_RANK"])
             self.ddp_world_size = int(os.environ["WORLD_SIZE"])
             self.device = torch.device(f"cuda:{self.ddp_local_rank}")
-            self.is_master_process = self.ddp_rank == 0  # this process will do logging, checkpointing etc.
 
             assert torch.cuda.is_available()
             torch.cuda.set_device(self.device)
@@ -57,7 +55,6 @@ class Trainer(Protocol):
             self.ddp_rank = 0
             self.ddp_local_rank = 0
             self.ddp_world_size = 1
-            self.is_master_process = True
             self.device = config.device
 
         # Prepare model
@@ -110,9 +107,35 @@ class Trainer(Protocol):
         ...
 
     @property
+    def is_main_process(self) -> bool:
+        """
+        Check if the current process is the original process.
+        """
+        return self.ddp_rank == 0
+
+    @property
+    def gradient_accumulation_steps(self) -> int:
+        """
+        Gradient accumulation is done across all processes, and so we need to divide the number of gradient
+        accumulation steps by the world size to account for parallel processing.
+        """
+        assert self.config.gradient_accumulation_steps % self.ddp_world_size == 0
+        return self.config.gradient_accumulation_steps // self.ddp_world_size
+
+    @property
+    def eval_steps(self) -> int:
+        """
+        Evaluation is done across all processes, and so we need to divide the number of evaluation steps by the
+        world size to account for parallel processing.
+
+        Note that this may reduce the number of evaluation steps if `eval_steps` is not divisible by `world_size`.
+        """
+        return self.config.eval_steps // self.ddp_world_size
+
+    @property
     def unwrapped_model(self) -> nn.Module:
         """
-        Get the unwrapped model.
+        Returns the original model before being wrapped using DDP.
         """
         return self.model.module if self.ddp else self.model
 
@@ -135,7 +158,7 @@ class Trainer(Protocol):
         Train the model.
         """
         # Prepare directory for checkpoints
-        if self.is_master_process:
+        if self.is_main_process:
             os.makedirs(self.config.out_dir, exist_ok=True)
 
         # Set the random seed to make results reproducible.
@@ -173,18 +196,18 @@ class Trainer(Protocol):
         self.val_dataloader.reset()
         loss_accum = torch.tensor(0.0, device=self.device)
         metrics_accum: dict[str, torch.Tensor] = defaultdict(lambda: torch.tensor(0.0, device=self.device))
-        for _ in range(self.config.eval_steps):
+        for _ in range(self.eval_steps):
             x, y = self.val_dataloader.next_batch(self.device)
             with torch.autocast(device_type=self.autocast_device_type, dtype=torch.bfloat16):
                 loss, metrics = self.calculate_loss(x, y, is_eval=True)
 
             # Accumulate loss
-            loss_accum += loss / self.config.eval_steps
+            loss_accum += loss / self.eval_steps
 
             # Accumulate metrics
             metrics = metrics or {}
             for k, v in metrics.items():
-                metrics_accum[k] = metrics_accum[k] + v / self.config.eval_steps
+                metrics_accum[k] = metrics_accum[k] + v / self.eval_steps
 
         if self.ddp:
             distributed.all_reduce(loss_accum, op=distributed.ReduceOp.AVG)
@@ -193,7 +216,7 @@ class Trainer(Protocol):
             for k, v in metrics_accum.items():
                 distributed.all_reduce(v, op=distributed.ReduceOp.AVG)
 
-        if self.is_master_process:
+        if self.is_main_process:
             # Round metrics
             rounded_metrics = {}
             for k, v in (metrics_accum or {}).items():
@@ -222,7 +245,7 @@ class Trainer(Protocol):
         self.model.train()
         self.optimizer.zero_grad()
         loss_accum = torch.tensor(0.0, device=self.device)
-        for micro_step in range(self.config.gradient_accumulation_steps):
+        for micro_step in range(self.gradient_accumulation_steps):
             x, y = self.train_dataloader.next_batch(self.device)
             x, y = x.to(self.device), y.to(self.device)
             if self.ddp:
@@ -230,7 +253,7 @@ class Trainer(Protocol):
                 # the official way to do this is with model.no_sync() context manager, but
                 # I really dislike that this bloats the code and forces us to repeat code
                 # looking at the source of that context manager, it just toggles this variable
-                self.model.require_backward_grad_sync = micro_step == self.config.gradient_accumulation_steps - 1  # type: ignore
+                self.model.require_backward_grad_sync = micro_step == self.gradient_accumulation_steps - 1  # type: ignore
             with torch.autocast(device_type=self.autocast_device_type, dtype=torch.bfloat16):
                 loss, _ = self.calculate_loss(x, y, is_eval=False)
 
@@ -238,7 +261,7 @@ class Trainer(Protocol):
             # because the gradients just add on each successive backward().
             # addition of gradients corresponds to a SUM in the objective, but
             # instead of a SUM we want MEAN. Scale the loss here so it comes out right
-            loss = loss / self.config.gradient_accumulation_steps
+            loss = loss / self.gradient_accumulation_steps
             loss_accum += loss.detach()
 
             loss.backward()
@@ -258,7 +281,7 @@ class Trainer(Protocol):
             torch.cuda.synchronize()  # wait for the GPU to finish work
         t1 = time.time()
         dt = t1 - t0  # time difference in seconds
-        if self.is_master_process and step % self.config.log_interval == 0:
+        if self.is_main_process and step % self.config.log_interval == 0:
             self.log_metrics(
                 {
                     "type": "train",

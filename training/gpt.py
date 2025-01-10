@@ -58,7 +58,7 @@ class GPTTrainer(Trainer):
         Configure the optimizer for training a GPT model.
         """
         # Get parameter groups for GPT model.
-        param_groups = self.get_param_groups(model, self.config, verbose=self.is_master_process)
+        param_groups = self.get_param_groups(model, self.config, verbose=self.is_main_process)
 
         # Create optimizer
         return torch.optim.AdamW(
