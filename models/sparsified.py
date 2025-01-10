@@ -1,5 +1,4 @@
 import dataclasses
-import inspect
 import json
 import os
 from typing import Optional
@@ -149,29 +148,3 @@ class SparsifiedGPT(nn.Module):
                 return GatedSAE_V2
             case _:
                 raise ValueError(f"Unrecognized SAE variant: {self.sae_variant}")
-
-    def configure_optimizers(self, weight_decay, learning_rate, device_type, is_master_process):
-        """
-        Configure optimizer for the sparsified model.
-        """
-        # Get existing param groups from GPT optimizer
-        gpt_optimizer = self.gpt.configure_optimizers(weight_decay, learning_rate, device_type, False)
-        param_groups = gpt_optimizer.param_groups
-
-        # Add SAE parameters to the optimizer
-        # NOTE: We set weight_decay to 0.0 for SAE parameters
-        sae_params = list(self.saes.parameters())
-        num_gpt_params = sum(p.numel() for g in gpt_optimizer.param_groups for p in g["params"])
-        num_sae_params = sum(p.numel() for p in sae_params)
-        if is_master_process:
-            print(f"Num GPT parameters: {num_gpt_params:,}")
-            print(f"Num SAE parameters: {num_sae_params:,}")
-        param_groups = gpt_optimizer.param_groups + [{"params": sae_params, "weight_decay": 0.0}]
-
-        # Create new optimizer
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and device_type == "cuda"
-        if is_master_process:
-            print(f"using fused AdamW: {use_fused}")
-        optimizer = torch.optim.AdamW(param_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, fused=use_fused)
-        return optimizer

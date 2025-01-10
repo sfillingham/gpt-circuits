@@ -10,10 +10,12 @@ import argparse
 from typing import Optional
 
 import torch
+from torch.optim import Optimizer
 
 from config.sae.training import SAETrainingConfig, options
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training import Trainer
+from training.gpt import GPTTrainer
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +62,34 @@ class SAETrainer(Trainer):
             }
 
         return loss, metrics
+
+    def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
+        """
+        Configure the optimizer for training a sparsified GPT model.
+        """
+        # Get existing param groups for GPT model.
+        gpt_param_groups = GPTTrainer.get_param_groups(model.gpt, self.config)
+
+        # Add SAE parameters to the optimizer.
+        # NOTE: We set weight_decay to 0.0 for SAE parameters.
+        sae_params = list(model.saes.parameters())
+        num_gpt_params = sum(p.numel() for g in gpt_param_groups for p in g["params"])
+        num_sae_params = sum(p.numel() for p in sae_params)
+
+        # Print number of parameters
+        if self.is_master_process:
+            print(f"Num GPT parameters: {num_gpt_params:,}")
+            print(f"Num SAE parameters: {num_sae_params:,}")
+        param_groups = gpt_param_groups + [{"params": sae_params, "weight_decay": 0.0}]
+
+        # Create optimizer
+        return torch.optim.AdamW(
+            param_groups,
+            lr=self.config.learning_rate,
+            betas=(0.9, 0.95),
+            eps=1e-8,
+            fused=self.is_fused_adamW_available,
+        )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 Training helpers
 """
 
+import inspect
 import math
 import os
 import time
@@ -67,12 +68,7 @@ class Trainer(Protocol):
             self.model = DistributedDataParallel(self.model, device_ids=[self.ddp_local_rank])
 
         # Create optimizer
-        self.optimizer = self.unwrapped_model.configure_optimizers(
-            weight_decay=config.weight_decay,
-            learning_rate=config.learning_rate,
-            device_type=self.device.type,
-            is_master_process=self.is_master_process,
-        )
+        self.optimizer = self.configure_optimizer(self.unwrapped_model)
 
         # Create data loaders
         self.train_dataloader = DataLoaderLite(
@@ -103,6 +99,14 @@ class Trainer(Protocol):
         """
         ...
 
+    def configure_optimizer(self, model: nn.Module) -> Optimizer:
+        """
+        Configure the optimizer.
+
+        :param model: The model to optimize, which is "unwrapped" using `model.module` if using DDP.
+        """
+        ...
+
     @property
     def unwrapped_model(self) -> nn.Module:
         """
@@ -116,6 +120,13 @@ class Trainer(Protocol):
         For some reason, autocast doesn't work with "mps", so we fallback to "cpu".
         """
         return "cpu" if self.device.type == "mps" else self.device.type
+
+    @property
+    def is_fused_adamW_available(self) -> bool:
+        """
+        Check if the fused AdamW optimizer is available.
+        """
+        return "fused" in inspect.signature(torch.optim.AdamW).parameters
 
     def train(self):
         """
