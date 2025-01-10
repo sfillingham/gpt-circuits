@@ -21,6 +21,10 @@ class SAEConfig(Config):
     def gpt_config(self) -> GPTConfig:
         return gpt_options[self.gpt_config_name]
 
+    @property
+    def block_size(self) -> int:
+        return self.gpt_config.block_size
+
 
 # SAE configuration options
 sae_options: dict[str, SAEConfig] = map_options(

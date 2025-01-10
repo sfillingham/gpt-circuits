@@ -100,7 +100,7 @@ class SparsifiedGPT(nn.Module):
         return hook
 
     @classmethod
-    def load(cls, dir, loss_coefficients=None, trainable_layers=None, device="cpu"):
+    def load(cls, dir, loss_coefficients=None, trainable_layers=None, device: torch.device = torch.device("cpu")):
         """
         Load a sparsified GPT model from a directory.
         """
@@ -118,7 +118,7 @@ class SparsifiedGPT(nn.Module):
         # Load SAE weights
         for layer_name, module in model.saes.items():
             weights_path = os.path.join(dir, f"sae_{layer_name}.safetensors")
-            load_model(module, weights_path, device=device)
+            load_model(module, weights_path, device=device.type)
 
         return model
 

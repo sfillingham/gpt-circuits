@@ -9,20 +9,20 @@ class Config:
     name: str
 
     @property
-    def device(self) -> str:
+    def device(self) -> torch.device:
         if torch.cuda.is_available():
-            return "cuda"
+            return torch.device("cuda")
         elif torch.backends.mps.is_available():
-            return "mps"
+            return torch.device("mps")
         else:
-            return "cpu"
+            return torch.device("cpu")
 
     @property
     def compile(self) -> bool:
         """
         Can only compile on CUDA
         """
-        return self.device == "cuda"
+        return self.device.type == "cuda"
 
 
 @dataclass
@@ -32,6 +32,7 @@ class TrainingConfig(Config):
     should_randomize: bool = True
 
     # Evaluation parameters
+    log_interval: int = 10
     eval_interval: int = 0
     eval_steps: int = 0
 

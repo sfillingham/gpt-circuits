@@ -135,7 +135,7 @@ class GPT(nn.Module):
         return (logits, None)
 
     @classmethod
-    def load(cls, dir, device="cpu"):
+    def load(cls, dir, device: torch.device):
         meta_path = os.path.join(dir, "model.json")
         weights_path = os.path.join(dir, "model.safetensors")
 
@@ -144,7 +144,7 @@ class GPT(nn.Module):
 
         model = GPT(GPTConfig(**meta["config"]))
 
-        load_model(model, weights_path, device=device)
+        load_model(model, weights_path, device=device.type)
         return model
 
     def save(self, dir):
