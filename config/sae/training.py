@@ -23,8 +23,7 @@ class SAETrainingConfig(TrainingConfig):
 
 
 # Shared training parameters
-gated_v2x8_shakespeare_64x4_defaults = {
-    "sae_config_name": "gated_v2x8_shakespeare_64x4",
+shakespeare_64x4_defaults = {
     "data_dir": "data/shakespeare",
     "eval_interval": 250,
     "eval_steps": 100,
@@ -41,16 +40,34 @@ gated_v2x8_shakespeare_64x4_defaults = {
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
         name="training.a.gated_v2x8_shakespeare_64x4",
-        **gated_v2x8_shakespeare_64x4_defaults,
+        sae_config_name="gated_v2x8_shakespeare_64x4",
+        **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(0.5, 0.5, 1.0, 1.5, 2.0),
         ),
     ),
     SAETrainingConfig(
         name="training.b.gated_v2x8_shakespeare_64x4",
-        **gated_v2x8_shakespeare_64x4_defaults,
+        sae_config_name="gated_v2x8_shakespeare_64x4",
+        **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(0.5, 0.5, 1.5, 2.0, 3.0),
+        ),
+    ),
+    SAETrainingConfig(
+        name="training.c.gated_v2x32_shakespeare_64x4",
+        sae_config_name="gated_v2x32_shakespeare_64x4",
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            l1=(2, 2, 6, 8, 12),
+        ),
+    ),
+    SAETrainingConfig(
+        name="training.d.gated_v2x32_shakespeare_64x4",
+        sae_config_name="gated_v2x32_shakespeare_64x4",
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            l1=(2, 3, 4, 6, 8),
         ),
     ),
 )
