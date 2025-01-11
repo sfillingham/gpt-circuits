@@ -39,7 +39,7 @@ class SAETrainer(Trainer, Protocol):
         """
         Convert model output to loss.
         """
-        return output.cross_entropy_loss + output.sae_loss
+        ...
 
     def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
         """

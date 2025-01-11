@@ -1,7 +1,8 @@
 """
 Train SAE weights for all layers concurrently.
 
-$ python -m training.sae.concurrent --config=gated_v2_shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v1.shakespeare_64x4
+$ python -m training.sae.concurrent --config=training.b.gated_v2x8_shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v1.shakespeare_64x4
+$ python -m training.sae.concurrent --config=training.a.gated_v2x8_shakespeare_64x4 --load_from=sparse_shakespeare_64x4 --name=sae.v2.shakespeare_64x4
 """
 
 import argparse
@@ -19,9 +20,9 @@ def parse_args() -> argparse.Namespace:
     Parse command line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="gated_v2_shakespeare_64x4", help="Training config")
-    parser.add_argument("--load_from", type=str, default="shakespeare_64x4", help="GPT model weights to load")
-    parser.add_argument("--name", type=str, default="sae.v1.shakespeare_64x4", help="Model name for checkpoints")
+    parser.add_argument("--config", type=str, help="Training config")
+    parser.add_argument("--load_from", type=str, help="GPT model weights to load")
+    parser.add_argument("--name", type=str, help="Model name for checkpoints")
     return parser.parse_args()
 
 
@@ -86,4 +87,4 @@ if __name__ == "__main__":
     trainer = ConcurrentTrainer(config, load_from=TrainingConfig.checkpoints_dir / args.load_from)
     trainer.train()
 
-    print(f"Best validation loss: {trainer.best_val_loss:.4f}")
+    print(f"Best validation losses: {[round(loss, 4) for loss in trainer.best_val_loss.tolist()]}")

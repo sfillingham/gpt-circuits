@@ -7,6 +7,7 @@ import math
 import os
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Optional, Protocol
 
 import torch
@@ -160,6 +161,8 @@ class Trainer(Protocol):
         # Prepare directory for checkpoints
         if self.is_main_process:
             os.makedirs(self.config.out_dir, exist_ok=True)
+            with open(self.log_path, "w") as file:
+                file.truncate(0)
 
         # Set the random seed to make results reproducible.
         torch.manual_seed(1337)
@@ -228,7 +231,8 @@ class Trainer(Protocol):
 
             # Save the model if it's the best we've seen so far
             best_val_loss = torch.min(self.best_val_loss, loss_accum)
-            if any(self.best_val_loss != best_val_loss) and step > 1:
+            # We're using a quirky comparison that allows `loss` to have dimensionality.
+            if self.best_val_loss.tolist() != best_val_loss.tolist() and step > 1:
                 self.best_val_loss = best_val_loss
                 self.save_checkpoint(self.unwrapped_model, self.best_val_loss == loss_accum)
 
@@ -306,7 +310,7 @@ class Trainer(Protocol):
 
     def log_metrics(self, metrics: dict):
         """
-        Log metrics to the console.
+        Print metrics and save them to a log file.
         """
         printable_metrics = {}
         for k, v in metrics.items():
@@ -314,7 +318,14 @@ class Trainer(Protocol):
                 printable_metrics[k] = self.pretty_print(v)
             else:
                 printable_metrics[k] = v
-        print(" | ".join([f"{k} {v}" for k, v in printable_metrics.items()]))
+
+        # Print to console
+        line = " | ".join([f"{k} {v}" for k, v in printable_metrics.items()])
+        print(line)
+
+        # Append to log file
+        with open(self.log_path, "a") as f:
+            f.write(line + "\n")
 
     @classmethod
     def pretty_print(cls, tensor: torch.Tensor, decimals: int = 4) -> str:
@@ -326,6 +337,13 @@ class Trainer(Protocol):
         """
         values = tensor.tolist() if tensor.numel() > 1 else [tensor.item()]
         return " ".join([f"{v:.{decimals}f}" for v in values])
+
+    @property
+    def log_path(self) -> Path:
+        """
+        Where to log metrics.
+        """
+        return self.config.out_dir / "log.txt"
 
     def get_lr(self, step):
         """

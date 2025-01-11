@@ -1,9 +1,9 @@
 """
 Train GPT model:
-$ python -m training.gpt --config=shakespeare_128x6
+$ python -m training.gpt --config=shakespeare_64x4
 
 DDP launch for e.g. 8 GPUs:
-$ torchrun --standalone --nproc_per_node=8 -m training.gpt --config=shakespeare_128x6
+$ torchrun --standalone --nproc_per_node=8 -m training.gpt --config=shakespeare_64x4
 """
 
 import argparse
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     Parse command line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="shakespeare_64x4", help="Training config")
+    parser.add_argument("--config", type=str, help="Training config")
     return parser.parse_args()
 
 

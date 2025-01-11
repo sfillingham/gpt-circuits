@@ -2,13 +2,15 @@
 Train a GPT model with experimental SAE regularization. By adding SAE regularization to GPT training,
 we hope to generate GPT model weights are amenable to producing sparser and higher quality SAE features.
 
-$ python -m training.sae.regularization --config=gated_v2_shakespeare_64x4 --name=sparse_shakespeare_64x4
+$ python -m training.sae.regularization --config=training.v1.gated_v2x8_shakespeare_64x4 --name=sparse_shakespeare_64x4
 """
 
 import argparse
 
+import torch
+
 from config.sae.training import SAETrainingConfig, options
-from models.sparsified import SparsifiedGPT
+from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training.sae import SAETrainer
 
 
@@ -17,8 +19,8 @@ def parse_args() -> argparse.Namespace:
     Parse command line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="gated_v2_shakespeare_64x4", help="Training config")
-    parser.add_argument("--name", type=str, default="sparse_shakespeare_64x4", help="Model name for checkpoints")
+    parser.add_argument("--config", type=str, help="Training config")
+    parser.add_argument("--name", type=str, help="Model name for checkpoints")
     return parser.parse_args()
 
 
@@ -35,6 +37,12 @@ class RegularizationTrainer(SAETrainer):
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
 
         super().__init__(model, config)
+
+    def output_to_loss(self, output: SparsifiedGPTOutput) -> torch.Tensor:
+        """
+        Add mean SAE loss across all layers to standard GPT cross entropy loss.
+        """
+        return output.cross_entropy_loss + output.sae_loss
 
 
 if __name__ == "__main__":
