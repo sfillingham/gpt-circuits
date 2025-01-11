@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, TypeVar
 
 import torch
@@ -50,11 +51,13 @@ class TrainingConfig(Config):
     grad_clip: Optional[float] = 1.0  # Maximum gradient norm
 
     @property
-    def out_dir(self) -> str:
+    def out_dir(self) -> Path:
         """
         Checkpoint path
         """
-        return f"checkpoints/{self.name}"
+        return Path(self.checkpoints_dir) / self.name
+
+    checkpoints_dir = Path("checkpoints")
 
 
 ConfigType = TypeVar("ConfigType", bound=Config)

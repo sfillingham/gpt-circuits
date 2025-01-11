@@ -24,7 +24,6 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="shakespeare_64x4", help="Training config")
-    parser.add_argument("--load_from", type=str, help="Path to load model from")
     return parser.parse_args()
 
 
@@ -33,15 +32,11 @@ class GPTTrainer(Trainer):
     Trainer for GPT models.
     """
 
-    def __init__(self, config: GPTTrainingConfig, load_from: str | None = None):
+    def __init__(self, config: GPTTrainingConfig):
         """
-        Load GPT model.
+        Load new GPT model from config.
         """
-        if load_from:
-            model = GPT.load(load_from, device=self.device)
-            print(f"Loaded model from checkpoint: {load_from}")
-        else:
-            model = GPT(config.gpt_config)
+        model = GPT(config.gpt_config)
 
         super().__init__(model, config)
 
@@ -106,7 +101,7 @@ if __name__ == "__main__":
     config = options[config_name]
 
     # Initialize trainer
-    trainer = GPTTrainer(config, args.load_from)
+    trainer = GPTTrainer(config)
     trainer.train()
 
     print(f"Best validation loss: {trainer.best_val_loss:.4f}")

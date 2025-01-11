@@ -1,55 +1,23 @@
-"""
-Train GPT model:
-$ python -m training.sae --config=gated_v2_shakespeare_64x4
-
-DDP launch for e.g. 8 GPUs:
-$ torchrun --standalone --nproc_per_node=8 -m training.sae --config=gated_v2_shakespeare_64x4
-"""
-
-import argparse
-from typing import Optional
+from typing import Optional, Protocol
 
 import torch
 from torch.optim import Optimizer
 
-from config.sae.training import SAETrainingConfig, options
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training import Trainer
 from training.gpt import GPTTrainer
 
 
-def parse_args() -> argparse.Namespace:
+class SAETrainer(Trainer, Protocol):
     """
-    Parse command line arguments.
+    Base class for sparsified GPT trainers.
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="gated_v2_shakespeare_64x4", help="Training config")
-    parser.add_argument("--load_from", type=str, help="Path to load model from")
-    return parser.parse_args()
-
-
-class SAETrainer(Trainer):
-    """
-    Trainer for GPT models.
-    """
-
-    def __init__(self, config: SAETrainingConfig, load_from: str | None = None):
-        """
-        Load GPT model.
-        """
-        # create model
-        if load_from:
-            model = SparsifiedGPT.load(load_from, config.loss_coefficients, device=config.device)
-            print(f"Loaded saved model from {args.load_from}")
-        else:
-            model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
-
-        super().__init__(model, config)
 
     def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Calculate model loss.
         """
+        # Adding SAE loss components to GPT cross entropy loss
         output: SparsifiedGPTOutput = self.model(x, y, is_eval=is_eval)
         loss = output.cross_entropy_loss + output.sae_loss
         metrics = None
@@ -93,18 +61,3 @@ class SAETrainer(Trainer):
             eps=1e-8,
             fused=self.is_fused_adamW_available,
         )
-
-
-if __name__ == "__main__":
-    # Parse command line arguments
-    args = parse_args()
-
-    # Load configuration
-    config_name = args.config
-    config = options[config_name]
-
-    # Initialize trainer
-    trainer = SAETrainer(config, args.load_from)
-    trainer.train()
-
-    print(f"Best validation loss: {trainer.best_val_loss:.4f}")

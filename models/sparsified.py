@@ -160,6 +160,13 @@ class SparsifiedGPT(nn.Module):
 
         return model
 
+    def load_gpt_weights(self, dir):
+        """
+        Load just the GPT model weights without loading SAE weights.
+        """
+        device = next(self.gpt.lm_head.parameters()).device
+        self.gpt = GPT.load(dir, device=device)
+
     def save(self, dir):
         """
         Save the sparsified GPT model to a directory.
