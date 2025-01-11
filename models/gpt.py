@@ -137,6 +137,24 @@ class GPT(nn.Module):
 
         return (logits, None)
 
+    def forward_with_patched_activations(self, idx: torch.Tensor, x: torch.Tensor, layer_idx: int) -> torch.Tensor:
+        """
+        Forward pass of the model with patched activations.
+
+        :param idx: Input token indices.
+        :param x: Patched activations.
+        :param layer_idx: Layer index. 0 patches activations just before the first transformer block.
+        """
+        # forward through transformer blocks starting with the specified layer
+        for block in self.transformer.h[layer_idx:]:
+            x = block(x)
+
+        # forward through the final layernorm and the classifier
+        x = self.transformer.ln_f(x)
+        logits = self.lm_head(x)
+
+        return logits
+
     @classmethod
     def load(cls, dir, device: torch.device):
         meta_path = os.path.join(dir, "model.json")

@@ -50,16 +50,18 @@ class SAETrainer(Trainer):
         """
         Calculate model loss.
         """
-        output: SparsifiedGPTOutput = self.model(x, y)
+        output: SparsifiedGPTOutput = self.model(x, y, is_eval=is_eval)
         loss = output.cross_entropy_loss + output.sae_loss
         metrics = None
 
         # Only include metrics if in evaluation mode
         if is_eval:
+            l0s = torch.stack([loss_components.l0 for loss_components in output.sae_loss_components.values()])
             metrics = {
                 "ce_loss": output.cross_entropy_loss,
                 "sae_loss": output.sae_loss,
                 "ce_loss_increases": output.ce_loss_increases,
+                "l0s": l0s,
             }
 
         return loss, metrics

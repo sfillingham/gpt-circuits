@@ -1,7 +1,6 @@
 torch
 numpy
-transformers
 datasets
 tiktoken
-tqdm
 gpustat
+safetensors

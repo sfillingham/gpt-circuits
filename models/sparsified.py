@@ -1,13 +1,13 @@
 import dataclasses
 import json
 import os
-from collections import defaultdict
 from contextlib import contextmanager
 from typing import Optional
 
 import torch
 import torch.nn as nn
 from safetensors.torch import load_model, save_model
+from torch.nn import functional as F
 
 from config.sae.models import SAEConfig, SAEVariant
 from config.sae.training import LossCoefficients
@@ -24,7 +24,7 @@ class SparsifiedGPTOutput:
 
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
-    ce_loss_increases: torch.Tensor
+    ce_loss_increases: Optional[torch.Tensor]
     sae_loss_components: dict[int, SAELossComponents]
 
     @property
@@ -59,19 +59,28 @@ class SparsifiedGPT(nn.Module):
         self.layer_idxs = trainable_layers if trainable_layers else list(range(len(config.n_features)))
         self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in self.layer_idxs]))
 
-    def forward(self, idx, targets=None) -> SparsifiedGPTOutput:
+    def forward(self, idx, targets=None, is_eval: bool = False) -> SparsifiedGPTOutput:
         """
         Forward pass of the sparsified model.
         """
-        # Encoders states are stored in `encoder_outputs` using hooks.
-        self.encoder_outputs = {}
         with self.use_saes() as encoder_outputs:
             logits, cross_entropy_loss = self.gpt(idx, targets)
+
+        # Calculate cross-entropy loss increase for each SAE layer if targets are provided during training evaluation.
+        ce_loss_increases = None
+        if targets is not None and is_eval:
+            ce_loss_increases = []
+            for layer_idx, output in encoder_outputs.items():
+                x = output.reconstructed_activations
+                sae_logits = self.gpt.forward_with_patched_activations(idx, x, layer_idx)
+                sae_ce_loss = F.cross_entropy(sae_logits.view(-1, sae_logits.size(-1)), targets.view(-1))
+                ce_loss_increases.append(sae_ce_loss - cross_entropy_loss)
+            ce_loss_increases = torch.stack(ce_loss_increases)
 
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
-            ce_loss_increases=torch.full((len(encoder_outputs.keys()),), 0.0001, device=logits.device),
+            ce_loss_increases=ce_loss_increases,
             sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
         )
 
@@ -79,6 +88,8 @@ class SparsifiedGPT(nn.Module):
     def use_saes(self):
         """
         Context manager for using SAE layers during the forward pass.
+
+        :yield encoder_outputs: Dictionary of encoder outputs.
         """
         # Dictionary for storing results
         encoder_outputs: dict[int, EncoderOutput] = {}
@@ -101,16 +112,6 @@ class SparsifiedGPT(nn.Module):
             for hook in hooks:
                 hook.remove()
 
-    def get_hook_target(self, layer_idx) -> nn.Module:
-        """
-        SAE layer -> Targeted named module for forward pre-hook.
-        """
-        if layer_idx < self.config.gpt_config.n_layer:
-            return self.gpt.get_submodule(f"transformer.h.{layer_idx}")
-        elif layer_idx == self.config.gpt_config.n_layer:
-            return self.gpt.get_submodule("transformer.ln_f")
-        raise ValueError(f"Invalid layer index: {layer_idx}")
-
     def create_hook(self, sae, output):
         """
         Create a forward pre-hook for the given layer index.
@@ -125,6 +126,16 @@ class SparsifiedGPT(nn.Module):
             output.__dict__ = sae(x).__dict__
 
         return hook
+
+    def get_hook_target(self, layer_idx) -> nn.Module:
+        """
+        SAE layer -> Targeted named module for forward pre-hook.
+        """
+        if layer_idx < self.config.gpt_config.n_layer:
+            return self.gpt.get_submodule(f"transformer.h.{layer_idx}")
+        elif layer_idx == self.config.gpt_config.n_layer:
+            return self.gpt.get_submodule("transformer.ln_f")
+        raise ValueError(f"Invalid layer index: {layer_idx}")
 
     @classmethod
     def load(cls, dir, loss_coefficients=None, trainable_layers=None, device: torch.device = torch.device("cpu")):

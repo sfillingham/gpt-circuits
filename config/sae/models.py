@@ -30,7 +30,7 @@ sae_options: dict[str, SAEConfig] = map_options(
     SAEConfig(
         name="gated_v2_shakespeare_64x4",
         gpt_config_name="ascii_64x4",
-        n_features=tuple(64 * n for n in (4, 4, 4, 8, 16)),
+        n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
         sae_variant=SAEVariant.GATED_V2,
     ),
 )

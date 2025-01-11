@@ -38,7 +38,7 @@ options: dict[str, SAETrainingConfig] = map_options(
         decay_lr=True,
         min_lr=1e-4,
         loss_coefficients=LossCoefficients(
-            l1=(0.5, 1.5, 1.5, 4.0, 9.0),
+            l1=(0.5, 0.5, 1.0, 2.0, 3.0),
         ),
     ),
 )
