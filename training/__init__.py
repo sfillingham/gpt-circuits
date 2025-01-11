@@ -202,7 +202,7 @@ class Trainer(Protocol):
                 loss, metrics = self.calculate_loss(x, y, is_eval=True)
 
             # Accumulate loss
-            loss_accum += loss / self.eval_steps
+            loss_accum = loss_accum + loss / self.eval_steps
 
             # Accumulate metrics
             metrics = metrics or {}
@@ -217,17 +217,12 @@ class Trainer(Protocol):
                 distributed.all_reduce(v, op=distributed.ReduceOp.AVG)
 
         if self.is_main_process:
-            # Round metrics
-            rounded_metrics = {}
-            for k, v in (metrics_accum or {}).items():
-                rounded_metrics[k] = [round(t.item(), 4) for t in v] if v.numel() > 1 else round(v.item(), 4)
-
             # Log metrics
             self.log_metrics(
                 {
                     "type": "eval",
-                    "loss": f"{loss_accum.item():.4f}",
-                    **rounded_metrics,
+                    "loss": loss_accum,
+                    **metrics_accum,
                 }
             )
 
@@ -262,7 +257,7 @@ class Trainer(Protocol):
             # addition of gradients corresponds to a SUM in the objective, but
             # instead of a SUM we want MEAN. Scale the loss here so it comes out right
             loss = loss / self.gradient_accumulation_steps
-            loss_accum += loss.detach()
+            loss_accum = loss_accum + loss.detach()
 
             loss.backward()
 
@@ -286,9 +281,9 @@ class Trainer(Protocol):
                 {
                     "type": "train",
                     "step": step,
-                    "loss": f"{loss_accum.item():.4f}",
+                    "loss": loss_accum,
                     "lr": f"{lr:.1e}",
-                    "norm": f"{norm.item():.4f}",
+                    "norm": norm,
                     "dt": f"{dt:.3f}",
                 }
             )
@@ -297,7 +292,24 @@ class Trainer(Protocol):
         """
         Log metrics to the console.
         """
-        print(" | ".join([f"{k} {v}" for k, v in metrics.items()]))
+        printable_metrics = {}
+        for k, v in metrics.items():
+            if isinstance(v, torch.Tensor):
+                printable_metrics[k] = self.pretty_print(v)
+            else:
+                printable_metrics[k] = v
+        print(" | ".join([f"{k} {v}" for k, v in printable_metrics.items()]))
+
+    @classmethod
+    def pretty_print(cls, tensor: torch.Tensor, decimals: int = 4) -> str:
+        """
+        Pretty prints a tensor by rounding and space-separating its values.
+
+        :param tensor: The tensor to pretty print. May have 0 or 1 dimensions.
+        :param decimals: The number of decimal places to round to.
+        """
+        values = tensor.tolist() if tensor.numel() > 1 else [tensor.item()]
+        return " ".join([f"{v:.{decimals}f}" for v in values])
 
     def get_lr(self, step):
         """
