@@ -6,9 +6,11 @@ $ python -m training.sae.concurrent --config=gated_v2_shakespeare_64x4 --load_fr
 
 import argparse
 
+import torch
+
 from config import TrainingConfig
 from config.sae.training import SAETrainingConfig, options
-from models.sparsified import SparsifiedGPT
+from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training.sae import SAETrainer
 
 
@@ -41,6 +43,32 @@ class ConcurrentTrainer(SAETrainer):
             param.requires_grad = False
 
         super().__init__(model, config)
+
+    def output_to_loss(self, output: SparsifiedGPTOutput) -> torch.Tensor:
+        """
+        Return an array of losses instead of a combined loss.
+        """
+        reconstruct_losses = torch.stack([loss.reconstruct for loss in output.sae_loss_components.values()])
+        sparsity_losses = torch.stack([loss.sparsity for loss in output.sae_loss_components.values()])
+        aux_losses = torch.stack([loss.aux for loss in output.sae_loss_components.values()])
+        return reconstruct_losses + sparsity_losses + aux_losses
+
+    def backward(self, loss):
+        """
+        Go through each layer's loss and call backward() on it.
+        """
+        for i, layer_loss in enumerate(loss):
+            is_last_layer = i == len(loss) - 1
+            layer_loss.backward(retain_graph=not is_last_layer)
+
+    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor):
+        """
+        Only save SAE weights for layers that have achieved a better validation loss.
+        """
+        # `is_best` contains a value for each layer indicating whether we have the best loss for that layer.
+        layers_to_save = [layer_name for should_save, layer_name in zip(is_best, model.saes.keys()) if should_save]
+        model.save(self.config.out_dir, layers_to_save)
+        print(f"Saved SAE weights for layers: {', '.join(layers_to_save)}")
 
 
 if __name__ == "__main__":

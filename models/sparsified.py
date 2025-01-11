@@ -167,9 +167,12 @@ class SparsifiedGPT(nn.Module):
         device = next(self.gpt.lm_head.parameters()).device
         self.gpt = GPT.load(dir, device=device)
 
-    def save(self, dir):
+    def save(self, dir, layers_to_save: Optional[list[str]] = None):
         """
         Save the sparsified GPT model to a directory.
+
+        :param dir: Directory for saving weights.
+        :param layers_to_save: Module names for SAE layers to save. If None, all layers will be saved.
         """
         # Save GPT model
         self.gpt.save(dir)
@@ -180,10 +183,14 @@ class SparsifiedGPT(nn.Module):
         with open(meta_path, "w") as f:
             json.dump(meta, f)
 
+        # Which layers should we save?
+        layers_to_save = layers_to_save or list(self.saes.keys())
+
         # Save SAE modules
         for layer_name, module in self.saes.items():
-            weights_path = os.path.join(dir, f"sae_{layer_name}.safetensors")
-            save_model(module, weights_path)
+            if layer_name in layers_to_save:
+                weights_path = os.path.join(dir, f"sae_{layer_name}.safetensors")
+                save_model(module, weights_path)
 
     def get_sae_class(self, config: SAEConfig) -> type:
         """

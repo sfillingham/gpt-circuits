@@ -34,7 +34,7 @@ class Trainer(Protocol):
     optimizer: Optimizer
     train_dataloader: DataLoaderLite
     val_dataloader: DataLoaderLite
-    best_val_loss: float = float("inf")
+    best_val_loss: torch.Tensor = torch.tensor(float("inf"))
 
     def __init__(self, model: nn.Module, config: TrainingConfig):
         self.config = config
@@ -227,10 +227,10 @@ class Trainer(Protocol):
             )
 
             # Save the model if it's the best we've seen so far
-            self.best_val_loss = min(self.best_val_loss, loss_accum.item())
-            if self.best_val_loss == loss_accum.item() and step > 1:
-                print("Saving checkpoint")
-                self.unwrapped_model.save(self.config.out_dir)
+            best_val_loss = torch.min(self.best_val_loss, loss_accum)
+            if any(self.best_val_loss != best_val_loss) and step > 1:
+                self.best_val_loss = best_val_loss
+                self.save_checkpoint(self.unwrapped_model, self.best_val_loss == loss_accum)
 
     def train_step(self, step):
         """
@@ -259,7 +259,7 @@ class Trainer(Protocol):
             loss = loss / self.gradient_accumulation_steps
             loss_accum = loss_accum + loss.detach()
 
-            loss.backward()
+            self.backward(loss)
 
         if self.ddp:
             distributed.all_reduce(loss_accum, op=distributed.ReduceOp.AVG)
@@ -287,6 +287,22 @@ class Trainer(Protocol):
                     "dt": f"{dt:.3f}",
                 }
             )
+
+    def backward(self, loss):
+        """
+        Backward pass for the model. May be overridden by subclasses.
+        """
+        loss.backward()
+
+    def save_checkpoint(self, model, is_best: torch.Tensor):
+        """
+        Save model weights.
+
+        :param model: The model to save.
+        :param is_best: A tensor comparing the current loss to the best loss.
+        """
+        model.save(self.config.out_dir)
+        print("Saved checkpoint")
 
     def log_metrics(self, metrics: dict):
         """

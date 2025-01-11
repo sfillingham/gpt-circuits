@@ -19,7 +19,7 @@ class SAETrainer(Trainer, Protocol):
         """
         # Adding SAE loss components to GPT cross entropy loss
         output: SparsifiedGPTOutput = self.model(x, y, is_eval=is_eval)
-        loss = output.cross_entropy_loss + output.sae_loss
+        loss = self.output_to_loss(output)
         metrics = None
 
         # Only include metrics if in evaluation mode
@@ -34,6 +34,12 @@ class SAETrainer(Trainer, Protocol):
             }
 
         return loss, metrics
+
+    def output_to_loss(self, output: SparsifiedGPTOutput) -> torch.Tensor:
+        """
+        Convert model output to loss.
+        """
+        return output.cross_entropy_loss + output.sae_loss
 
     def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
         """
