@@ -127,12 +127,12 @@ class SparsifiedGPT(nn.Module):
 
     def get_hook_target(self, layer_idx) -> nn.Module:
         """
-        SAE layer -> Targeted named module for forward pre-hook.
+        SAE layer -> Targeted module for forward pre-hook.
         """
         if layer_idx < self.config.gpt_config.n_layer:
-            return self.gpt.get_submodule(f"transformer.h.{layer_idx}")
+            return self.gpt.transformer.h[layer_idx]
         elif layer_idx == self.config.gpt_config.n_layer:
-            return self.gpt.get_submodule("transformer.ln_f")
+            return self.gpt.transformer.ln_f
         raise ValueError(f"Invalid layer index: {layer_idx}")
 
     @classmethod
