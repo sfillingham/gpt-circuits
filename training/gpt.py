@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, help="Training config")
+    parser.add_argument("--name", type=str, help="Model name for checkpoints")
     return parser.parse_args()
 
 
@@ -99,6 +100,10 @@ if __name__ == "__main__":
     # Load configuration
     config_name = args.config
     config = options[config_name]
+
+    # Update outdir if name is provided
+    if args.name:
+        config.name = args.name
 
     # Initialize trainer
     trainer = GPTTrainer(config)

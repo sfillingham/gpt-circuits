@@ -1,4 +1,4 @@
-from typing import Optional, Protocol
+from typing import Optional
 
 import torch
 from torch.optim import Optimizer
@@ -8,7 +8,7 @@ from training import Trainer
 from training.gpt import GPTTrainer
 
 
-class SAETrainer(Trainer, Protocol):
+class SAETrainer(Trainer):
     """
     Base class for sparsified GPT trainers.
     """

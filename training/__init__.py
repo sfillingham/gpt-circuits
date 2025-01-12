@@ -9,7 +9,7 @@ import os
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -21,7 +21,7 @@ from config import TrainingConfig
 from data.dataloaders import DataLoaderLite
 
 
-class Trainer(Protocol):
+class Trainer:
     """
     Base class for a trainer.
     """
@@ -66,6 +66,8 @@ class Trainer(Protocol):
 
         # Wrap the model if using DDP
         if self.ddp:
+            if not distributed.is_initialized():
+                distributed.init_process_group(backend="nccl")
             self.model = DistributedDataParallel(self.model, device_ids=[self.ddp_local_rank])
 
         # Create optimizer
@@ -176,9 +178,6 @@ class Trainer(Protocol):
         # Set the float32 matmul precision to high for better performance.
         torch.set_float32_matmul_precision("high")
 
-        if self.ddp:
-            distributed.init_process_group(backend="nccl")
-
         # Let's see what we're starting with.
         self.val_step(0)
 
@@ -190,9 +189,6 @@ class Trainer(Protocol):
             last_step = step == self.config.max_steps
             if step % self.config.eval_interval == 0 or last_step:
                 self.val_step(step)
-
-        if self.ddp:
-            distributed.destroy_process_group()
 
     @torch.no_grad()
     def val_step(self, step):

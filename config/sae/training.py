@@ -59,7 +59,7 @@ options: dict[str, SAETrainingConfig] = map_options(
         sae_config_name="gated_v2x32.shakespeare_64x4",
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(2, 2, 6, 8, 12),
+            l1=(2.0, 2.0, 6.0, 8.0, 12.0),
         ),
     ),
     SAETrainingConfig(
@@ -67,7 +67,7 @@ options: dict[str, SAETrainingConfig] = map_options(
         sae_config_name="gated_v2x32.shakespeare_64x4",
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(2, 2, 4, 5, 8),
+            l1=(2.0, 2.0, 4.0, 5.5, 8.0),
         ),
     ),
 )
