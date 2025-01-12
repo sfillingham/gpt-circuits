@@ -13,7 +13,7 @@ from config.sae.models import SAEConfig, SAEVariant
 from config.sae.training import LossCoefficients
 from models.gpt import GPT
 from models.sae import EncoderOutput, SAELossComponents
-from models.sae.gated import GatedSAE_V2
+from models.sae.gated import GatedSAE, GatedSAE_V2
 
 
 @dataclasses.dataclass
@@ -194,6 +194,8 @@ class SparsifiedGPT(nn.Module):
         Maps the SAE variant to the actual class.
         """
         match config.sae_variant:
+            case SAEVariant.GATED:
+                return GatedSAE
             case SAEVariant.GATED_V2:
                 return GatedSAE_V2
             case _:
