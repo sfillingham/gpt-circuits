@@ -32,6 +32,13 @@ class SAELossComponents:
         self.aux = aux
         self.l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
 
+    @property
+    def total(self) -> torch.Tensor:
+        """
+        Returns sum of reconstruction, sparsity, and aux loss.
+        """
+        return self.reconstruct + self.sparsity + self.aux
+
 
 @dataclass
 class EncoderOutput:

@@ -17,7 +17,6 @@ class SAETrainer(Trainer, Protocol):
         """
         Calculate model loss.
         """
-        # Adding SAE loss components to GPT cross entropy loss
         output: SparsifiedGPTOutput = self.model(x, y, is_eval=is_eval)
         loss = self.output_to_loss(output)
         metrics = None
@@ -49,15 +48,16 @@ class SAETrainer(Trainer, Protocol):
         gpt_param_groups = GPTTrainer.get_param_groups(model.gpt, self.config)
 
         # Add SAE parameters to the optimizer.
-        # NOTE: We set weight_decay to 0.0 for SAE parameters.
-        sae_params = list(model.saes.parameters())
+        sae_params = [p for p in model.saes.parameters() if p.requires_grad]
         num_gpt_params = sum(p.numel() for g in gpt_param_groups for p in g["params"])
         num_sae_params = sum(p.numel() for p in sae_params)
 
         # Print number of parameters
         if self.is_main_process:
-            print(f"Num GPT parameters: {num_gpt_params:,}")
-            print(f"Num SAE parameters: {num_sae_params:,}")
+            print(f"Trainable GPT parameters: {num_gpt_params:,}")
+            print(f"Trainable SAE parameters: {num_sae_params:,}")
+
+        # We set weight_decay to 0.0 for SAE parameters.
         param_groups = gpt_param_groups + [{"params": sae_params, "weight_decay": 0.0}]
 
         # Create optimizer

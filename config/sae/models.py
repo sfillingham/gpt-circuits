@@ -28,13 +28,13 @@ class SAEConfig(Config):
 # SAE configuration options
 sae_options: dict[str, SAEConfig] = map_options(
     SAEConfig(
-        name="gated_v2x8_shakespeare_64x4",
+        name="gated_v2x8.shakespeare_64x4",
         gpt_config_name="ascii_64x4",
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
         sae_variant=SAEVariant.GATED_V2,
     ),
     SAEConfig(
-        name="gated_v2x32_shakespeare_64x4",
+        name="gated_v2x32.shakespeare_64x4",
         gpt_config_name="ascii_64x4",
         n_features=tuple(64 * n for n in (32, 32, 32, 32, 32)),
         sae_variant=SAEVariant.GATED_V2,

@@ -1,10 +1,10 @@
 """
 Train SAE weights for all layers concurrently.
 
-$ python -m training.sae.concurrent --config=training.b.gated_v2x8_shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v1.shakespeare_64x4
-$ python -m training.sae.concurrent --config=training.a.gated_v2x8_shakespeare_64x4 --load_from=sparse_shakespeare_64x4 --name=sae.v2.shakespeare_64x4
-$ python -m training.sae.concurrent --config=training.c.gated_v2x32_shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v3.shakespeare_64x4
-$ python -m training.sae.concurrent --config=training.d.gated_v2x32_shakespeare_64x4 --load_from=sparse_shakespeare_64x4 --name=sae.v4.shakespeare_64x4
+$ python -m training.sae.concurrent --config=train.a.gated_v2x8.shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v1.shakespeare_64x4
+$ python -m training.sae.concurrent --config=train.b.gated_v2x8.shakespeare_64x4 --load_from=sparse_shakespeare_64x4 --name=sae.v2.shakespeare_64x4
+$ python -m training.sae.concurrent --config=train.c.gated_v2x32.shakespeare_64x4 --load_from=shakespeare_64x4 --name=sae.v3.shakespeare_64x4
+$ python -m training.sae.concurrent --config=train.d.gated_v2x32.shakespeare_64x4 --load_from=sparse_shakespeare_64x4 --name=sae.v4.shakespeare_64x4
 """
 
 import argparse
@@ -51,18 +51,14 @@ class ConcurrentTrainer(SAETrainer):
         """
         Return an array of losses instead of a combined loss.
         """
-        reconstruct_losses = torch.stack([loss.reconstruct for loss in output.sae_loss_components.values()])
-        sparsity_losses = torch.stack([loss.sparsity for loss in output.sae_loss_components.values()])
-        aux_losses = torch.stack([loss.aux for loss in output.sae_loss_components.values()])
-        return reconstruct_losses + sparsity_losses + aux_losses
+        return torch.stack([loss.total for loss in output.sae_loss_components.values()])
 
     def backward(self, loss):
         """
-        Go through each layer's loss and call backward() on it.
+        Because SAE layers are independent, we can add layer losses and run a single backward pass instead of having to
+        run a backward pass using each layer's loss.
         """
-        for i, layer_loss in enumerate(loss):
-            is_last_layer = i == len(loss) - 1
-            layer_loss.backward(retain_graph=not is_last_layer)
+        loss.sum().backward()
 
     def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor):
         """

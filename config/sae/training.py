@@ -39,35 +39,35 @@ shakespeare_64x4_defaults = {
 # Training configuration options
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
-        name="training.a.gated_v2x8_shakespeare_64x4",
-        sae_config_name="gated_v2x8_shakespeare_64x4",
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(0.5, 0.5, 1.0, 1.5, 2.0),
-        ),
-    ),
-    SAETrainingConfig(
-        name="training.b.gated_v2x8_shakespeare_64x4",
-        sae_config_name="gated_v2x8_shakespeare_64x4",
+        name="train.a.gated_v2x8.shakespeare_64x4",
+        sae_config_name="gated_v2x8.shakespeare_64x4",
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(0.5, 0.5, 1.5, 2.0, 3.0),
         ),
     ),
     SAETrainingConfig(
-        name="training.c.gated_v2x32_shakespeare_64x4",
-        sae_config_name="gated_v2x32_shakespeare_64x4",
+        name="train.b.gated_v2x8.shakespeare_64x4",
+        sae_config_name="gated_v2x8.shakespeare_64x4",
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            l1=(0.5, 0.5, 1.0, 1.5, 2.0),
+        ),
+    ),
+    SAETrainingConfig(
+        name="train.c.gated_v2x32.shakespeare_64x4",
+        sae_config_name="gated_v2x32.shakespeare_64x4",
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(2, 2, 6, 8, 12),
         ),
     ),
     SAETrainingConfig(
-        name="training.d.gated_v2x32_shakespeare_64x4",
-        sae_config_name="gated_v2x32_shakespeare_64x4",
+        name="train.d.gated_v2x32.shakespeare_64x4",
+        sae_config_name="gated_v2x32.shakespeare_64x4",
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(2, 3, 4, 6, 8),
+            l1=(2, 2, 4, 5, 8),
         ),
     ),
 )

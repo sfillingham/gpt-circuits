@@ -32,10 +32,8 @@ class SparsifiedGPTOutput:
         """
         Mean SAE loss across all trainable SAE layers.
         """
-        reconstruct_losses = torch.stack([loss.reconstruct for loss in self.sae_loss_components.values()])
-        sparsity_losses = torch.stack([loss.sparsity for loss in self.sae_loss_components.values()])
-        aux_losses = torch.stack([loss.aux for loss in self.sae_loss_components.values()])
-        return (reconstruct_losses + sparsity_losses + aux_losses).mean()
+        layer_losses = torch.stack([loss.total for loss in self.sae_loss_components.values()])
+        return layer_losses.mean()
 
 
 class SparsifiedGPT(nn.Module):

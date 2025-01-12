@@ -2,6 +2,7 @@
 Trainer interface. Adopted from: https://github.com/karpathy/build-nanogpt
 """
 
+import dataclasses
 import inspect
 import math
 import os
@@ -163,6 +164,9 @@ class Trainer(Protocol):
             os.makedirs(self.config.out_dir, exist_ok=True)
             with open(self.log_path, "w") as file:
                 file.truncate(0)
+
+            # Print configuration
+            self.log_metrics(dataclasses.asdict(self.config))
 
         # Set the random seed to make results reproducible.
         torch.manual_seed(1337)

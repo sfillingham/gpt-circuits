@@ -1,8 +1,5 @@
-*.txt
-*.csv
-*.json
+checkpoints/*
 *.npy
-*.safetensors
 
 # OS files
 .DS_Store
