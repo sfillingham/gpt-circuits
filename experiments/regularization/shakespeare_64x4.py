@@ -67,7 +67,7 @@ if __name__ == "__main__":
             config = sae_options["train.b.gated_v2x8.shakespeare_64x4"]
             config.name = "exp.sae.v2.shakespeare_64x4"
             config.sae_config.n_features = tuple(64 * n for n in (8, 8, 32, 64, 64))
-            config.loss_coefficients.l1 = (0.16, 0.37, 1.5, 3.8, 4.1)
+            config.loss_coefficients.l1 = (0.15, 0.35, 1.5, 3.8, 4.1)
 
             # Initialize trainer
             trainer = ConcurrentTrainer(
