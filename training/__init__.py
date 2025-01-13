@@ -196,6 +196,10 @@ class Trainer:
             if step % self.config.eval_interval == 0 or last_step:
                 self.val_step(step)
 
+        # Log final result
+        if self.is_main_process:
+            self.log({"best_val_loss": self.pretty_print(self.best_val_loss)}, self.LogDestination.DEBUG)
+
     @torch.no_grad()
     def val_step(self, step):
         """

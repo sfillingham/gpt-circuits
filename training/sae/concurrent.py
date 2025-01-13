@@ -84,5 +84,3 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = ConcurrentTrainer(config, load_from=TrainingConfig.checkpoints_dir / args.load_from)
     trainer.train()
-
-    print(f"Best validation losses: {[round(loss, 4) for loss in trainer.best_val_loss.tolist()]}")

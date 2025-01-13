@@ -63,5 +63,3 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = RegularizationTrainer(config, 1.0)
     trainer.train()
-
-    print(f"Best validation loss: {trainer.best_val_loss:.4f}")
