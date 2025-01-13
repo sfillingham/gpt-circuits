@@ -1,10 +1,12 @@
 """
 Train a GPT model with experimental SAE regularization.
 
-$ python -m experiments.regularization.shakespeare_64x4 --experiment=0
+$ python -m experiments.regularization.shakespeare_64x4 --experiment=1
 """
 
 import argparse
+
+import torch
 
 from config import TrainingConfig
 from config.gpt.training import options as gpt_options
@@ -46,7 +48,7 @@ if __name__ == "__main__":
             config.max_steps = 15000
 
             # Initialize trainer
-            trainer = RegularizationTrainer(config, 100.0)
+            trainer = RegularizationTrainer(config, torch.tensor(100.0))
             trainer.train()
 
         case 2:

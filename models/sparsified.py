@@ -28,11 +28,11 @@ class SparsifiedGPTOutput:
     sae_loss_components: dict[int, SAELossComponents]
 
     @property
-    def sae_loss(self) -> torch.Tensor:
+    def sae_losses(self) -> torch.Tensor:
         """
-        Mean SAE loss across all trainable SAE layers.
+        SAE losses for each trainable layer.
         """
-        return torch.stack([loss.total for loss in self.sae_loss_components.values()]).mean()
+        return torch.stack([loss.total for loss in self.sae_loss_components.values()])
 
 
 class SparsifiedGPT(nn.Module):

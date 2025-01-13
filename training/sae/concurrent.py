@@ -50,9 +50,9 @@ class ConcurrentTrainer(SAETrainer):
 
     def output_to_loss(self, output: SparsifiedGPTOutput) -> torch.Tensor:
         """
-        Return an array of losses instead of a combined loss.
+        Return an array of losses instead of a single combined loss.
         """
-        return torch.stack([loss.total for loss in output.sae_loss_components.values()])
+        return output.sae_losses
 
     def backward(self, loss):
         """

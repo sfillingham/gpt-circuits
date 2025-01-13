@@ -27,7 +27,7 @@ class SAETrainer(Trainer):
             metrics = {
                 "loss": loss,
                 "ce_loss": output.cross_entropy_loss,
-                "sae_loss": output.sae_loss,
+                "sae_losses": output.sae_losses,
                 "ce_loss_increases": output.ce_loss_increases,
                 "l0s": l0s,
             }

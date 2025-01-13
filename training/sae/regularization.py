@@ -29,9 +29,9 @@ class RegularizationTrainer(SAETrainer):
     Experimental trainer that adds SAE regularization to GPT training.
     """
 
-    λ: float  # Regularization coefficient
+    λ: torch.Tensor  # Regularization coefficient
 
-    def __init__(self, config: SAETrainingConfig, λ: float = 1.0):
+    def __init__(self, config: SAETrainingConfig, λ=torch.tensor(1.0)):
         """
         Load new sparsified GPT model from config.
         """
@@ -46,7 +46,7 @@ class RegularizationTrainer(SAETrainer):
         """
         Add mean SAE loss to GPT cross-entropy loss.
         """
-        return output.cross_entropy_loss + self.λ * output.sae_loss
+        return output.cross_entropy_loss + (self.λ * output.sae_losses).mean()
 
 
 if __name__ == "__main__":
@@ -61,5 +61,5 @@ if __name__ == "__main__":
     config.name = args.name
 
     # Initialize trainer
-    trainer = RegularizationTrainer(config, 1.0)
+    trainer = RegularizationTrainer(config, torch.tensor(1.0))
     trainer.train()
