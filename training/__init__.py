@@ -337,7 +337,7 @@ class Trainer:
         print(line)
 
         # Append to log file
-        with open(self.config.out_dir / destination, "a") as f:
+        with open(self.config.out_dir / destination.value, "a") as f:
             f.write(line + "\n")
 
     @classmethod

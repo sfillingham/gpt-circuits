@@ -29,12 +29,14 @@ class RegularizationTrainer(SAETrainer):
     Experimental trainer that adds SAE regularization to GPT training.
     """
 
-    λ = 1.0  # Regularization coefficient
+    λ: float  # Regularization coefficient
 
-    def __init__(self, config: SAETrainingConfig):
+    def __init__(self, config: SAETrainingConfig, λ: float = 1.0):
         """
         Load new sparsified GPT model from config.
         """
+        self.λ = λ
+
         # create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
 
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     config.name = args.name
 
     # Initialize trainer
-    trainer = RegularizationTrainer(config)
+    trainer = RegularizationTrainer(config, 1.0)
     trainer.train()
 
     print(f"Best validation loss: {trainer.best_val_loss:.4f}")
