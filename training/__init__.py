@@ -8,6 +8,7 @@ import math
 import os
 import time
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,11 @@ class Trainer:
     train_dataloader: DataLoaderLite
     val_dataloader: DataLoaderLite
     best_val_loss: torch.Tensor = torch.tensor(float("inf"))
+
+    class LogDestination(str, Enum):
+        DEBUG = "debug.log"
+        EVAL = "eval.log"
+        TRAIN = "train.log"
 
     def __init__(self, model: nn.Module, config: TrainingConfig):
         self.config = config
@@ -164,11 +170,12 @@ class Trainer:
         # Prepare directory for checkpoints
         if self.is_main_process:
             os.makedirs(self.config.out_dir, exist_ok=True)
-            with open(self.log_path, "w") as file:
-                file.truncate(0)
+            for file_name in self.LogDestination:
+                with open(self.config.out_dir / file_name, "w") as file:
+                    file.truncate(0)
 
             # Print configuration
-            self.log_metrics(dataclasses.asdict(self.config))
+            self.log(dataclasses.asdict(self.config), self.LogDestination.DEBUG)
 
         # Set the random seed to make results reproducible.
         torch.manual_seed(1337)
@@ -221,12 +228,14 @@ class Trainer:
 
         if self.is_main_process:
             # Log metrics
-            self.log_metrics(
+            self.log(
                 {
                     "type": "eval",
+                    "step": step,
                     "loss": loss_accum,
                     **metrics_accum,
-                }
+                },
+                self.LogDestination.EVAL,
             )
 
             # Save the model if it's the best we've seen so far
@@ -281,7 +290,7 @@ class Trainer:
         t1 = time.time()
         dt = t1 - t0  # time difference in seconds
         if self.is_main_process and step % self.config.log_interval == 0:
-            self.log_metrics(
+            self.log(
                 {
                     "type": "train",
                     "step": step,
@@ -289,7 +298,8 @@ class Trainer:
                     "lr": f"{lr:.1e}",
                     "norm": norm,
                     "dt": f"{dt:.3f}",
-                }
+                },
+                self.LogDestination.TRAIN,
             )
 
     def backward(self, loss):
@@ -308,23 +318,26 @@ class Trainer:
         model.save(self.config.out_dir)
         print("Saved checkpoint")
 
-    def log_metrics(self, metrics: dict):
+    def log(self, data: dict, destination: LogDestination):
         """
-        Print metrics and save them to a log file.
+        Print data and save them to a log file.
+
+        :param data: The data to log.
+        :param file_name: The name of the file to log to.
         """
-        printable_metrics = {}
-        for k, v in metrics.items():
+        printable_data = {}
+        for k, v in data.items():
             if isinstance(v, torch.Tensor):
-                printable_metrics[k] = self.pretty_print(v)
+                printable_data[k] = self.pretty_print(v)
             else:
-                printable_metrics[k] = v
+                printable_data[k] = v
 
         # Print to console
-        line = " | ".join([f"{k} {v}" for k, v in printable_metrics.items()])
+        line = " | ".join([f"{k} {v}" for k, v in printable_data.items()])
         print(line)
 
         # Append to log file
-        with open(self.log_path, "a") as f:
+        with open(self.config.out_dir / destination, "a") as f:
             f.write(line + "\n")
 
     @classmethod
@@ -337,13 +350,6 @@ class Trainer:
         """
         values = tensor.tolist() if tensor.numel() > 1 else [tensor.item()]
         return " ".join([f"{v:.{decimals}f}" for v in values])
-
-    @property
-    def log_path(self) -> Path:
-        """
-        Where to log metrics.
-        """
-        return self.config.out_dir / "log.txt"
 
     def get_lr(self, step):
         """
