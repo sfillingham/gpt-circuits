@@ -8,6 +8,7 @@ $ python -m training.sae.concurrent --config=train.d.gated_v2x32.shakespeare_64x
 """
 
 import argparse
+from pathlib import Path
 
 import torch
 
@@ -33,7 +34,7 @@ class ConcurrentTrainer(SAETrainer):
     Train SAE weights for all layers concurrently.
     """
 
-    def __init__(self, config: SAETrainingConfig, load_from: str):
+    def __init__(self, config: SAETrainingConfig, load_from: str | Path):
         """ """
         # Create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
