@@ -9,7 +9,6 @@ import os
 import time
 from collections import defaultdict
 from enum import Enum
-from pathlib import Path
 from typing import Optional
 
 import torch
