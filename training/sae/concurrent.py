@@ -67,7 +67,6 @@ class ConcurrentTrainer(SAETrainer):
         # `is_best` contains a value for each layer indicating whether we have the best loss for that layer.
         layers_to_save = [layer_name for should_save, layer_name in zip(is_best, model.saes.keys()) if should_save]
         model.save(self.config.out_dir, layers_to_save)
-        print(f"Saved SAE weights for layers: {', '.join(layers_to_save)}")
 
 
 if __name__ == "__main__":

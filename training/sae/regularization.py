@@ -29,6 +29,8 @@ class RegularizationTrainer(SAETrainer):
     Experimental trainer that adds SAE regularization to GPT training.
     """
 
+    λ = 1.0  # Regularization coefficient
+
     def __init__(self, config: SAETrainingConfig):
         """
         Load new sparsified GPT model from config.
@@ -42,7 +44,7 @@ class RegularizationTrainer(SAETrainer):
         """
         Add mean SAE loss to GPT cross-entropy loss.
         """
-        return output.cross_entropy_loss + output.sae_loss
+        return output.cross_entropy_loss + self.λ * output.sae_loss
 
 
 if __name__ == "__main__":

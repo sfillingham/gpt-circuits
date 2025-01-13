@@ -226,23 +226,25 @@ class Trainer:
                 distributed.all_reduce(v, op=distributed.ReduceOp.AVG)
 
         if self.is_main_process:
+            # Save the model if it's the best we've seen so far
+            best_val_loss = torch.min(self.best_val_loss, loss_accum)
+            is_best = best_val_loss == loss_accum
+            # We're using a quirky comparison that allows `loss` to have dimensionality.
+            if self.best_val_loss.tolist() != best_val_loss.tolist() and step > 0:
+                self.best_val_loss = best_val_loss
+                self.save_checkpoint(self.unwrapped_model, is_best)
+
             # Log metrics
             self.log(
                 {
                     "type": "eval",
                     "step": step,
                     "loss": loss_accum,
+                    "checkpoint": is_best if step > 0 else False,
                     **metrics_accum,
                 },
                 self.LogDestination.EVAL,
             )
-
-            # Save the model if it's the best we've seen so far
-            best_val_loss = torch.min(self.best_val_loss, loss_accum)
-            # We're using a quirky comparison that allows `loss` to have dimensionality.
-            if self.best_val_loss.tolist() != best_val_loss.tolist() and step > 1:
-                self.best_val_loss = best_val_loss
-                self.save_checkpoint(self.unwrapped_model, self.best_val_loss == loss_accum)
 
     def train_step(self, step):
         """
@@ -315,7 +317,6 @@ class Trainer:
         :param is_best: A tensor comparing the current loss to the best loss.
         """
         model.save(self.config.out_dir)
-        print("Saved checkpoint")
 
     def log(self, data: dict, destination: LogDestination):
         """
@@ -348,7 +349,7 @@ class Trainer:
         :param decimals: The number of decimal places to round to.
         """
         values = tensor.tolist() if tensor.numel() > 1 else [tensor.item()]
-        return " ".join([f"{v:.{decimals}f}" for v in values])
+        return " ".join([f"{v:.{decimals}f}" if isinstance(v, float) else str(v) for v in values])
 
     def get_lr(self, step):
         """
