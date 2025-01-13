@@ -35,7 +35,7 @@ class RegularizationTrainer(SAETrainer):
         """
         Load new sparsified GPT model from config.
         """
-        self.λ = λ
+        self.λ = λ.to(config.device)
 
         # create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)

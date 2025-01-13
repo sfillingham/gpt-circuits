@@ -169,9 +169,6 @@ class Trainer:
         # Prepare directory for checkpoints
         if self.is_main_process:
             os.makedirs(self.config.out_dir, exist_ok=True)
-            for file_name in self.LogDestination:
-                with open(self.config.out_dir / file_name, "w") as file:
-                    file.truncate(0)
 
             # Print configuration
             self.log(dataclasses.asdict(self.config), self.LogDestination.DEBUG)

@@ -1,4 +1,4 @@
-from typing import Optional, Protocol
+from typing import Optional
 
 import torch
 from torch.optim import Optimizer
