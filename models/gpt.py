@@ -163,7 +163,7 @@ class GPT(nn.Module):
         with open(meta_path, "r") as f:
             meta = json.load(f)
 
-        model = GPT(GPTConfig(**meta["config"]))
+        model = GPT(GPTConfig(**meta))
 
         load_model(model, weights_path, device=device.type)
         return model
@@ -172,9 +172,7 @@ class GPT(nn.Module):
         meta_path = os.path.join(dir, "model.json")
         weights_path = os.path.join(dir, "model.safetensors")
 
-        meta = {
-            "config": dataclasses.asdict(self.config),
-        }
+        meta = dataclasses.asdict(self.config, dict_factory=GPTConfig.dict_factory)
         with open(meta_path, "w") as f:
             json.dump(meta, f)
 

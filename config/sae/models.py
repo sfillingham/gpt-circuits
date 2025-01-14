@@ -20,6 +20,14 @@ class SAEConfig(Config):
     def block_size(self) -> int:
         return self.gpt_config.block_size
 
+    @staticmethod
+    def dict_factory(fields: list) -> dict:
+        """
+        Only export n_features and sae_variant.
+        """
+        whitelisted_fields = ("n_features", "sae_variant")
+        return {k: v for (k, v) in fields if k in whitelisted_fields}
+
 
 # SAE configuration options
 sae_options: dict[str, SAEConfig] = map_options(

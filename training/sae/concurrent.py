@@ -15,6 +15,7 @@ import torch
 from config import TrainingConfig
 from config.sae.training import SAETrainingConfig, options
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
+from training import Trainer
 from training.sae import SAETrainer
 
 
@@ -34,10 +35,17 @@ class ConcurrentTrainer(SAETrainer):
     Train SAE weights for all layers concurrently.
     """
 
+    checkpoint_l0s: torch.Tensor
+    checkpoint_ce_loss_increases: torch.Tensor
+
     def __init__(self, config: SAETrainingConfig, load_from: str | Path):
-        """ """
+        """
+        Load and freeze GPT weights before training SAE weights.
+        """
         # Create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
+        self.checkpoint_l0s = torch.zeros((len(model.saes),), device=config.device)
+        self.checkpoint_ce_loss_increases = torch.zeros((len(model.saes),), device=config.device)
 
         # Load GPT weights
         model.load_gpt_weights(load_from)
@@ -61,13 +69,30 @@ class ConcurrentTrainer(SAETrainer):
         """
         loss.sum().backward()
 
-    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor):
+    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor, metrics: dict[str, torch.Tensor]):
         """
-        Only save SAE weights for layers that have achieved a better validation loss.
+        Save SAE weights for layers that have achieved a better validation loss and update checkpoint metrics.
         """
         # `is_best` contains a value for each layer indicating whether we have the best loss for that layer.
         layers_to_save = [layer_name for should_save, layer_name in zip(is_best, model.saes.keys()) if should_save]
         model.save(self.config.out_dir, layers_to_save)
+
+        # Update checkpoint metrics
+        self.checkpoint_l0s[is_best] = metrics["l0s"][is_best]
+        self.checkpoint_ce_loss_increases[is_best] = metrics["ce_loss_increases"][is_best]
+
+    def train(self):
+        """
+        Log checkpoint metrics once training is complete.
+        """
+        super().train()
+        self.log(
+            {
+                "checkpoint_l0s": self.checkpoint_l0s,
+                "checkpoint_ce_loss_increases": self.checkpoint_ce_loss_increases,
+            },
+            Trainer.LogDestination.DEBUG,
+        )
 
 
 if __name__ == "__main__":

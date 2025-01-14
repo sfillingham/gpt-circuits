@@ -139,16 +139,19 @@ class SparsifiedGPT(nn.Module):
         """
         Load a sparsified GPT model from a directory.
         """
+        # Load GPT model
+        gpt = GPT.load(dir, device=device)
+
         # Load SAE config
         meta_path = os.path.join(dir, "sae.json")
         with open(meta_path, "r") as f:
             meta = json.load(f)
+        config = SAEConfig(**meta)
+        config.gpt_config = gpt.config
 
         # Create model using saved config
-        model = SparsifiedGPT(SAEConfig(**meta["config"]), loss_coefficients, trainable_layers)
-
-        # Load GPT weights
-        model.gpt = GPT.load(dir, device=device)
+        model = SparsifiedGPT(config, loss_coefficients, trainable_layers)
+        model.gpt = gpt
 
         # Load SAE weights
         for layer_name, module in model.saes.items():
@@ -176,7 +179,7 @@ class SparsifiedGPT(nn.Module):
 
         # Save SAE config
         meta_path = os.path.join(dir, "sae.json")
-        meta = {"config": dataclasses.asdict(self.config)}
+        meta = dataclasses.asdict(self.config, dict_factory=SAEConfig.dict_factory)
         with open(meta_path, "w") as f:
             json.dump(meta, f)
 

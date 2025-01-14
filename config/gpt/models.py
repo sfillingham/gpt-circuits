@@ -24,6 +24,13 @@ class GPTConfig(Config):
             case _:
                 raise ValueError(f"Unrecognized vocab size: {self.vocab_size}")
 
+    @staticmethod
+    def dict_factory(fields: list) -> dict:
+        """
+        Only export integer fields (exclude name and device)
+        """
+        return {k: v for (k, v) in fields if type(v) is int}
+
 
 # GPT configuration options
 gpt_options: dict[str, GPTConfig] = map_options(

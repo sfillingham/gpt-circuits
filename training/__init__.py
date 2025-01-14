@@ -233,7 +233,7 @@ class Trainer:
             # We're using a quirky comparison that allows `loss` to have dimensionality.
             if self.best_val_loss.tolist() != best_val_loss.tolist() and step > 0:
                 self.best_val_loss = best_val_loss
-                self.save_checkpoint(self.unwrapped_model, is_best)
+                self.save_checkpoint(self.unwrapped_model, is_best, metrics_accum)
 
             # Log metrics
             self.log(
@@ -310,12 +310,13 @@ class Trainer:
         """
         loss.backward()
 
-    def save_checkpoint(self, model, is_best: torch.Tensor):
+    def save_checkpoint(self, model, is_best: torch.Tensor, metrics: dict[str, torch.Tensor]):
         """
         Save model weights.
 
         :param model: The model to save.
         :param is_best: A tensor comparing the current loss to the best loss.
+        :param metrics: Metrics from latest evaluation.
         """
         model.save(self.config.out_dir)
 
