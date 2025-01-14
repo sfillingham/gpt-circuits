@@ -46,7 +46,7 @@ def sweep_training_parameters(
             {
                 "name": f"{name_prefix}.{i}",
                 "load_from": load_from,
-                "log_to": TrainingConfig.checkpoints_dir / f"experiments/{name_prefix}.csv",
+                "log_to": TrainingConfig.checkpoints_dir / f"{name_prefix}.csv",
                 "loss_coefficients": coefficients,
             }
         )

@@ -17,5 +17,7 @@ class ParameterSweeper:
         self.fn(**parameters)
 
     def sweep(self):
+        # CUDA requirement: https://stackoverflow.com/questions/72779926
+        multiprocessing.set_start_method("spawn")
         with multiprocessing.Pool(processes=self.pool_size) as pool:
             pool.map(self.execute_fn, self.parameter_sets)
