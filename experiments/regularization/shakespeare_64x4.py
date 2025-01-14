@@ -139,7 +139,7 @@ if __name__ == "__main__":
                 load_from=TrainingConfig.checkpoints_dir / "experiments/shakespeare_64x4.normal",
                 starting_from=starting_coefficients,
                 ending_with=ending_coefficients,
-                steps=20,
+                steps=24,
             )
 
         # Train SAE layers for a GPT model created using SAE regularization
@@ -154,5 +154,5 @@ if __name__ == "__main__":
                 load_from=TrainingConfig.checkpoints_dir / "experiments/shakespeare_64x4.regularized",
                 starting_from=starting_coefficients,
                 ending_with=ending_coefficients,
-                steps=20,
+                steps=24,
             )
