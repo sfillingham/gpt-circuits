@@ -13,13 +13,9 @@ class LossCoefficients:
 
 @dataclass
 class SAETrainingConfig(TrainingConfig):
-    sae_config_name: str = ""
+    sae_config: SAEConfig = field(default_factory=SAEConfig)
     trainable_layers: Optional[tuple] = None  # If none, all layers are trained.
     loss_coefficients: LossCoefficients = field(default_factory=LossCoefficients)
-
-    @property
-    def sae_config(self) -> SAEConfig:
-        return sae_options[self.sae_config_name]
 
 
 # Shared training parameters
@@ -40,7 +36,7 @@ shakespeare_64x4_defaults = {
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
         name="train.a.gated_v2x8.shakespeare_64x4",
-        sae_config_name="gated_v2x8.shakespeare_64x4",
+        sae_config=sae_options["gated_v2x8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(0.5, 0.5, 1.5, 2.0, 3.0),
@@ -48,7 +44,7 @@ options: dict[str, SAETrainingConfig] = map_options(
     ),
     SAETrainingConfig(
         name="train.b.gated_v2x8.shakespeare_64x4",
-        sae_config_name="gated_v2x8.shakespeare_64x4",
+        sae_config=sae_options["gated_v2x8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(0.5, 0.5, 1.0, 1.5, 2.0),
@@ -56,7 +52,7 @@ options: dict[str, SAETrainingConfig] = map_options(
     ),
     SAETrainingConfig(
         name="train.c.gated_v2x32.shakespeare_64x4",
-        sae_config_name="gated_v2x32.shakespeare_64x4",
+        sae_config=sae_options["gated_v2x32.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(2.0, 2.0, 6.0, 8.0, 12.0),
@@ -64,7 +60,7 @@ options: dict[str, SAETrainingConfig] = map_options(
     ),
     SAETrainingConfig(
         name="train.d.gated_v2x32.shakespeare_64x4",
-        sae_config_name="gated_v2x32.shakespeare_64x4",
+        sae_config=sae_options["gated_v2x32.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             l1=(2.0, 2.0, 4.0, 5.5, 8.0),

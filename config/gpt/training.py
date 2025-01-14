@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from config import TrainingConfig, map_options
 
@@ -7,18 +7,14 @@ from .models import GPTConfig, gpt_options
 
 @dataclass
 class GPTTrainingConfig(TrainingConfig):
-    gpt_config_name: str = ""
-
-    @property
-    def gpt_config(self) -> GPTConfig:
-        return gpt_options[self.gpt_config_name]
+    gpt_config: GPTConfig = field(default_factory=GPTConfig)
 
 
 # Training configuration options
 options: dict[str, GPTTrainingConfig] = map_options(
     GPTTrainingConfig(
         name="shakespeare_64x4",
-        gpt_config_name="ascii_64x4",
+        gpt_config=gpt_options["ascii_64x4"],
         data_dir="data/shakespeare",
         eval_interval=250,
         eval_steps=100,
@@ -32,7 +28,7 @@ options: dict[str, GPTTrainingConfig] = map_options(
     ),
     GPTTrainingConfig(
         name="shakespeare_128x6",
-        gpt_config_name="ascii_128x6",
+        gpt_config=gpt_options["ascii_128x6"],
         data_dir="data/shakespeare",
         eval_interval=250,
         eval_steps=100,
@@ -46,7 +42,7 @@ options: dict[str, GPTTrainingConfig] = map_options(
     ),
     GPTTrainingConfig(
         name="tiny_32x4",
-        gpt_config_name="tiktoken_32x4",
+        gpt_config=gpt_options["tiktoken_32x4"],
         data_dir="data/tiny_stories_10m",
         eval_interval=250,
         eval_steps=100,
@@ -57,7 +53,7 @@ options: dict[str, GPTTrainingConfig] = map_options(
     ),
     GPTTrainingConfig(
         name="tiny_64x2",
-        gpt_config_name="tiktoken_64x2",
+        gpt_config=gpt_options["tiktoken_64x2"],
         data_dir="data/tiny_stories_10m",
         eval_interval=250,
         eval_steps=100,

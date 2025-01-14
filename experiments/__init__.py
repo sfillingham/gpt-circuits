@@ -1,5 +1,6 @@
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
+
+from torch import multiprocessing
 
 
 class ParameterSweeper:
@@ -16,5 +17,5 @@ class ParameterSweeper:
         self.fn(**parameters)
 
     def sweep(self):
-        with ThreadPoolExecutor(max_workers=self.pool_size) as executor:
-            executor.map(self.execute_fn, self.parameter_sets)
+        with multiprocessing.Pool(processes=self.pool_size) as pool:
+            pool.map(self.execute_fn, self.parameter_sets)

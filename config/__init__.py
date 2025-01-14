@@ -7,7 +7,7 @@ import torch
 
 @dataclass
 class Config:
-    name: str = field(metadata={"exclude": True})
+    name: str = field(metadata={"exclude": True}, default="")
     device: torch.device = field(default_factory=lambda: get_default_device(), metadata={"exclude": True})
     compile: bool = field(default_factory=lambda: get_default_device().type == "cuda", metadata={"exclude": True})
 

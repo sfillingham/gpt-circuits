@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from config import Config, map_options
@@ -12,13 +12,9 @@ class SAEVariant(str, Enum):
 
 @dataclass
 class SAEConfig(Config):
-    gpt_config_name: str = ""
+    gpt_config: GPTConfig = field(default_factory=GPTConfig)
     n_features: tuple = ()  # Number of features in each layer
     sae_variant: SAEVariant = SAEVariant.GATED_V2
-
-    @property
-    def gpt_config(self) -> GPTConfig:
-        return gpt_options[self.gpt_config_name]
 
     @property
     def block_size(self) -> int:
@@ -29,13 +25,13 @@ class SAEConfig(Config):
 sae_options: dict[str, SAEConfig] = map_options(
     SAEConfig(
         name="gated_v2x8.shakespeare_64x4",
-        gpt_config_name="ascii_64x4",
+        gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
         sae_variant=SAEVariant.GATED_V2,
     ),
     SAEConfig(
         name="gated_v2x32.shakespeare_64x4",
-        gpt_config_name="ascii_64x4",
+        gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (32, 32, 32, 32, 32)),
         sae_variant=SAEVariant.GATED_V2,
     ),
