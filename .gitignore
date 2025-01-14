@@ -1,8 +1,9 @@
-checkpoints/*
+checkpoints/
 *.npy
 
 # OS files
 .DS_Store
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

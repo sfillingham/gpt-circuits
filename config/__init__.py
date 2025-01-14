@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, TypeVar
 
@@ -7,23 +7,9 @@ import torch
 
 @dataclass
 class Config:
-    name: str
-
-    @property
-    def device(self) -> torch.device:
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            return torch.device("mps")
-        else:
-            return torch.device("cpu")
-
-    @property
-    def compile(self) -> bool:
-        """
-        Can only compile on CUDA
-        """
-        return self.device.type == "cuda"
+    name: str = field(metadata={"exclude": True})
+    device: torch.device = field(default_factory=lambda: get_default_device(), metadata={"exclude": True})
+    compile: bool = field(default_factory=lambda: get_default_device().type == "cuda", metadata={"exclude": True})
 
 
 @dataclass
@@ -61,6 +47,18 @@ class TrainingConfig(Config):
 
 
 ConfigType = TypeVar("ConfigType", bound=Config)
+
+
+def get_default_device() -> torch.device:
+    """
+    Defaults to CPU if no GPU is available.
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
 
 
 def map_options(*options: ConfigType) -> dict[str, ConfigType]:
