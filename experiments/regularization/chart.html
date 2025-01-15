@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div>
+      <h3>Layer 0</h3>
+      <canvas id="Chart0"></canvas>
+      <h3>Layer 1</h3>
+      <canvas id="Chart1"></canvas>
+      <h3>Layer 2</h3>
+      <canvas id="Chart2"></canvas>
+      <h3>Layer 3</h3>
+      <canvas id="Chart3"></canvas>
+      <h3>Layer 4</h3>
+      <canvas id="Chart4"></canvas>
+    </div>
+    <script>
+      async function fetchData() {
+        const response = await fetch(`results.json`);
+        const data = await response.json();
+        return data;
+      }
+
+      function updateChart(data, layerIdx) {
+        const ctx = document.getElementById(`Chart${layerIdx}`);
+        new Chart(ctx, {
+          type: "scatter",
+          data: {
+            datasets: [
+              {
+                label: "Original Weights",
+                data: data.original[layerIdx],
+                borderWidth: 1,
+              },
+              {
+                label: "Regularized Weights",
+                data: data.regularized[layerIdx],
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            showLine: true,
+            tension: 0.25,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "L0",
+                },
+                type: "logarithmic",
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Cross-Entropy Loss Increase",
+                },
+                suggestedMin: 0.0,
+                suggestedMax: 0.8,
+              },
+            },
+          },
+        });
+      }
+
+      fetchData().then((data) => {
+        updateChart(data, 0);
+        updateChart(data, 1);
+        updateChart(data, 2);
+        updateChart(data, 3);
+        updateChart(data, 4);
+      });
+    </script>
+  </body>
+</html>

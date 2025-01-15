@@ -126,7 +126,8 @@ if __name__ == "__main__":
             config = sae_training_options["train.a.gated_v2x8.shakespeare_64x4"]
             config.name = "experiments/regularization/shakespeare_64x4.regularized"
             config.sae_config.n_features = tuple(64 * n for n in (8, 8, 32, 64, 64))
-            config.loss_coefficients.l1 = (0.5, 0.5, 1.0, 3.5, 3.5)
+            # Targeting l0s ~ 10.0
+            config.loss_coefficients.l1 = (0.11, 0.19, 1.3, 3.8, 4.1)
             config.max_steps = 15000
 
             # Initialize trainer
@@ -140,17 +141,17 @@ if __name__ == "__main__":
             # Sweep loss coefficients
             # The following coefficients yield l0s ~ 10.0: (0.4, 0.8, 7.5, 23.0, 40.0)
             parameter_sets = []
-            starting_coefficients = (0.1, 0.2, 1.0, 8.0, 14.0)
-            ending_coefficients = (2.0, 4.0, 20.0, 65.0, 90.0)
+            starting_coefficients = (0.2, 0.3, 2.5, 10.0, 18.0)
+            ending_coefficients = (1.0, 4.0, 20.0, 55.0, 90.0)
             num_sweeps = 5
             for i in range(num_sweeps):
-                print(f"Starting parameter sweep {i}/{num_sweeps}")
+                print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="experiments/regularization/sae.shakespeare_64x4.normal",
                     load_from=TrainingConfig.checkpoints_dir / "experiments/regularization/shakespeare_64x4.normal",
                     starting_from=starting_coefficients,
                     ending_with=ending_coefficients,
-                    steps=24,
+                    steps=16,
                 )
 
         case 3:
@@ -160,18 +161,18 @@ if __name__ == "__main__":
             # Sweep loss coefficients
             # The following coefficients yield l0s ~ 10.0: (0.15, 0.33, 1.5, 3.8, 4.1)
             parameter_sets = []
-            starting_coefficients = (0.04, 0.1, 0.3, 0.5, 1.0)
-            ending_coefficients = (0.80, 2.0, 6.0, 10.0, 20.0)
+            starting_coefficients = (0.04, 0.1, 0.8, 2.0, 2.0)
+            ending_coefficients = (0.80, 1.4, 5.0, 9.0, 9.0)
             num_sweeps = 5
             for i in range(num_sweeps):
-                print(f"Starting parameter sweep {i}/{num_sweeps}")
+                print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="experiments/regularization/sae.shakespeare_64x4.regularized",
                     load_from=TrainingConfig.checkpoints_dir
                     / "experiments/regularization/shakespeare_64x4.regularized",
                     starting_from=starting_coefficients,
                     ending_with=ending_coefficients,
-                    steps=24,
+                    steps=16,
                 )
 
         case 4:
