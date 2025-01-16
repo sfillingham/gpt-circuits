@@ -27,7 +27,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
         self.b_dec = nn.Parameter(torch.zeros(n_embd))
 
         try:
-            # NOTE: Subclass might define these using properties.
+            # NOTE: Subclass might define these properties.
             self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
             self.r_mag = nn.Parameter(torch.zeros(F))
         except KeyError:

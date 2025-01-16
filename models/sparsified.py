@@ -14,7 +14,7 @@ from config.sae.training import LossCoefficients
 from models.gpt import GPT
 from models.sae import EncoderOutput, SAELossComponents
 from models.sae.gated import GatedSAE, GatedSAE_V2
-from models.sae.standard import StandardSAE
+from models.sae.standard import StandardSAE, StandardSAE_V2
 
 
 @dataclasses.dataclass
@@ -200,6 +200,8 @@ class SparsifiedGPT(nn.Module):
         match config.sae_variant:
             case SAEVariant.STANDARD:
                 return StandardSAE
+            case SAEVariant.STANDARD_V2:
+                return StandardSAE_V2
             case SAEVariant.GATED:
                 return GatedSAE
             case SAEVariant.GATED_V2:

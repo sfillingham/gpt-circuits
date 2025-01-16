@@ -2,6 +2,7 @@
 Train a GPT model with experimental SAE regularization. By adding SAE regularization to GPT training,
 we hope to generate GPT model weights are amenable to producing sparser and higher quality SAE features.
 
+$ python -m training.sae.regularization --config=train.b.standard_v2x8.shakespeare_64x4 --name=standard_v2_sparse_shakespeare_64x4
 $ python -m training.sae.regularization --config=train.b.gated_v2x8.shakespeare_64x4 --name=sparse_shakespeare_64x4
 """
 

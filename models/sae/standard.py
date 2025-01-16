@@ -2,7 +2,6 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 
 from config.sae.models import SAEConfig
 from config.sae.training import LossCoefficients
@@ -21,11 +20,16 @@ class StandardSAE(nn.Module, SparseAutoencoder):
         n_embd = config.gpt_config.n_embd  # GPT embedding size.
         self.l1_coefficient = loss_coefficients.l1[layer_idx] if loss_coefficients else None
         self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, n_embd)))
-        self.W_enc = nn.Parameter(torch.empty(n_embd, F))
-        self.W_enc.data = self.W_dec.data.T.detach().clone()  # initialize W_enc from W_dec
 
         self.b_enc = nn.Parameter(torch.zeros(F))
         self.b_dec = nn.Parameter(torch.zeros(n_embd))
+
+        try:
+            # NOTE: Subclass might define these properties.
+            self.W_enc = nn.Parameter(torch.empty(n_embd, F))
+            self.W_enc.data = self.W_dec.data.T.detach().clone()  # initialize W_enc from W_dec
+        except KeyError:
+            pass
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -56,3 +60,17 @@ class StandardSAE(nn.Module, SparseAutoencoder):
             output.loss = SAELossComponents(x, x_reconstructed, feature_magnitudes, sparsity_loss)
 
         return output
+
+
+class StandardSAE_V2(StandardSAE):
+    """
+    Experimental Sparse Autoencoder module that ties the encoder and decoder weights to avoid feature absorption.
+    Reference: https://www.lesswrong.com/posts/kcg58WhRxFA9hv9vN
+    """
+
+    @property
+    def W_enc(self):
+        """
+        Tying encoder weights to decoder weights.
+        """
+        return self.W_dec.t()

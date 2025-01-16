@@ -7,6 +7,7 @@ from config.gpt.models import GPTConfig, gpt_options
 
 class SAEVariant(str, Enum):
     STANDARD = "standard"
+    STANDARD_V2 = "standard_v2"
     GATED = "gated"
     GATED_V2 = "gated_v2"
 
@@ -37,6 +38,12 @@ sae_options: dict[str, SAEConfig] = map_options(
         gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
         sae_variant=SAEVariant.STANDARD,
+    ),
+    SAEConfig(
+        name="standard_v2x8.shakespeare_64x4",
+        gpt_config=gpt_options["ascii_64x4"],
+        n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
+        sae_variant=SAEVariant.STANDARD_V2,
     ),
     SAEConfig(
         name="gated_v2x8.shakespeare_64x4",
