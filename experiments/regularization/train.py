@@ -6,7 +6,9 @@ $ python -m experiments.regularization.train --step=0
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
+from statistics import mean
 
 import pandas as pd
 import torch
@@ -21,13 +23,17 @@ from config.sae.training import (
     shakespeare_64x4_defaults,
 )
 from experiments import ParameterSweeper
-from experiments.regularization.setup import GatedV2ExperimentSetup
+from experiments.regularization.setup import (  # noqa: F401
+    GatedV2ExperimentSetup,
+    StandardExperimentSetup,
+    StandardV2ExperimentSetup,
+)
 from training.gpt import GPTTrainer
 from training.sae.concurrent import ConcurrentTrainer
 from training.sae.regularization import RegularizationTrainer
 
 # Experiment setups are in setup.py
-setup = GatedV2ExperimentSetup()
+setup = StandardV2ExperimentSetup()
 
 
 def parse_args() -> argparse.Namespace:
@@ -211,31 +217,35 @@ if __name__ == "__main__":
                 normal_data = normal_csv[normal_csv["layer"] == layer]
                 regularized_data = regularized_csv[regularized_csv["layer"] == layer]
 
-                # Group and average data by coefficient
-                normal_data = normal_data.groupby("coefficient").mean().reset_index()
-                regularized_data = regularized_data.groupby("coefficient").mean().reset_index()
+                # Create dictionaries for easy access
+                normal_coefs_to_loss_increases = defaultdict(list)
+                regularized_coefs_to_loss_increases = defaultdict(list)
+                for row in normal_data.itertuples():
+                    normal_coefs_to_loss_increases[row.coefficient].append(row)
+                for row in regularized_data.itertuples():
+                    regularized_coefs_to_loss_increases[row.coefficient].append(row)
 
-                # Sort data by L0
-                normal_data = normal_data.sort_values("l0")
-                regularized_data = regularized_data.sort_values("l0")
+                # Sort data by coefficient
+                sorted_normal_data = sorted(normal_coefs_to_loss_increases.items(), key=lambda x: x[0])
+                sorted_regularized_data = sorted(regularized_coefs_to_loss_increases.items(), key=lambda x: x[0])
 
                 # Add data to dictionary
                 data["original"].append(
                     [
                         {
-                            "x": row.l0,
-                            "y": row.ce_loss_increase,
+                            "x": mean([row.l0 for row in row_set]),
+                            "y": [row.ce_loss_increase for row in row_set],
                         }
-                        for row in normal_data.itertuples()
+                        for _, row_set in sorted_normal_data
                     ]
                 )
                 data["regularized"].append(
                     [
                         {
-                            "x": row.l0,
-                            "y": row.ce_loss_increase,
+                            "x": mean([row.l0 for row in row_set]),
+                            "y": [row.ce_loss_increase for row in row_set],
                         }
-                        for row in regularized_data.itertuples()
+                        for _, row_set in sorted_regularized_data
                     ]
                 )
 

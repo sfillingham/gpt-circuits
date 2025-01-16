@@ -18,7 +18,9 @@
     </div>
     <script>
       async function fetchData() {
-        const response = await fetch(`results.json`);
+        // const response = await fetch(`gated_v2.results.json`);
+        // const response = await fetch(`standard.results.json`);
+        const response = await fetch(`standard_v2.results.json`);
         const data = await response.json();
         return data;
       }
@@ -67,6 +69,21 @@
       }
 
       fetchData().then((data) => {
+        let original = data.original;
+        let regularized = data.regularized;
+
+        function transformData(data) {
+          return data.map((row) =>
+            row.map((item) => ({
+              x: item.x,
+              y: Array.isArray(item.y) ? item.y.reduce((acc, val) => acc + val, 0) : item.y,
+            }))
+          );
+        }
+
+        data.original = transformData(original);
+        data.regularized = transformData(regularized);
+
         updateChart(data, 0);
         updateChart(data, 1);
         updateChart(data, 2);
