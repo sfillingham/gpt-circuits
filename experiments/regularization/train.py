@@ -24,6 +24,7 @@ from config.sae.training import (
 )
 from experiments import ParameterSweeper
 from experiments.regularization.setup import (  # noqa: F401
+    GatedExperimentSetup,
     GatedV2ExperimentSetup,
     StandardExperimentSetup,
     StandardV2ExperimentSetup,
