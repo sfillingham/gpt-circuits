@@ -18,9 +18,7 @@
     </div>
     <script>
       async function fetchData() {
-        // const response = await fetch(`gated_v2.results.json`);
-        // const response = await fetch(`standard.results.json`);
-        const response = await fetch(`standard_v2.results.json`);
+        const response = await fetch(`results.json`);
         const data = await response.json();
         return data;
       }
