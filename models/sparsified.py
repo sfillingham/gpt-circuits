@@ -57,16 +57,6 @@ class SparsifiedGPT(nn.Module):
         self.layer_idxs = trainable_layers if trainable_layers else list(range(len(config.n_features)))
         self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in self.layer_idxs]))
 
-        # Register hooks
-        for layer_idx in self.layer_idxs:
-            target = self.get_hook_target(layer_idx)
-            sae = self.saes[f"{layer_idx}"]
-            target.register_forward_pre_hook(self.create_hook(layer_idx, sae))
-
-        # Internal state
-        self.should_use_saes = False
-        self.encoder_outputs: dict[int, EncoderOutput] = {}
-
     def forward(self, idx, targets=None, is_eval: bool = False) -> SparsifiedGPTOutput:
         """
         Forward pass of the sparsified model.
@@ -99,30 +89,39 @@ class SparsifiedGPT(nn.Module):
 
         :yield encoder_outputs: Dictionary of encoder outputs.
         """
-        # Reset encoder outputs
-        self.encoder_outputs = {}
-        self.should_use_saes = True
+        # Dictionary for storing results
+        encoder_outputs: dict[int, EncoderOutput] = {}
+
+        # Register hooks
+        hooks = []
+        for layer_idx in self.layer_idxs:
+            target = self.get_hook_target(layer_idx)
+            sae = self.saes[f"{layer_idx}"]
+            # Output values will be overwritten (hack to pass object by reference)
+            output = EncoderOutput(torch.tensor(0), torch.tensor(0))
+            hooks.append(target.register_forward_pre_hook(self.create_hook(sae, output)))
+            encoder_outputs[layer_idx] = output
 
         try:
-            yield self.encoder_outputs
+            yield encoder_outputs
 
         finally:
-            self.should_use_saes = False
+            # Unregister hooks
+            for hook in hooks:
+                hook.remove()
 
-    def create_hook(self, layer_idx, sae):
+    def create_hook(self, sae, output):
         """
         Create a forward pre-hook for the given layer index.
 
-        :param layer_idx: SAE layer index.
         :param sae: SAE module to use for the forward pass.
+        :param output: Encoder output to be updated.
         """
 
         def hook(_, inputs):
-            # Only use SAE if the context manager is active
-            if self.should_use_saes:
-                x = inputs[0]
-                # Store output to shared state
-                self.encoder_outputs[layer_idx] = sae(x)
+            x = inputs[0]
+            # Override field values instead of replacing reference
+            output.__dict__ = sae(x).__dict__
 
         return hook
 

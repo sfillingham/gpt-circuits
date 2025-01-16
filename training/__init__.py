@@ -173,6 +173,11 @@ class Trainer:
             # Print configuration
             self.log(dataclasses.asdict(self.config), self.LogDestination.DEBUG)
 
+        # Set the random seed to make results reproducible.
+        torch.manual_seed(1337)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(1337)
+
         # Set the float32 matmul precision to high for better performance.
         torch.set_float32_matmul_precision("high")
 
