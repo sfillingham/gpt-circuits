@@ -25,7 +25,7 @@ class SAELossComponents:
         x_reconstructed: torch.Tensor,
         feature_magnitudes: torch.Tensor,
         sparsity: torch.Tensor,
-        aux: torch.Tensor,
+        aux: torch.Tensor = torch.tensor(0.0),
     ):
         self.reconstruct = F.mse_loss(x, x_reconstructed)
         self.sparsity = sparsity

@@ -32,8 +32,17 @@ shakespeare_64x4_defaults = {
     "min_lr": 1e-4,
 }
 
+
 # Training configuration options
 options: dict[str, SAETrainingConfig] = map_options(
+    SAETrainingConfig(
+        name="train.a.standardx8.shakespeare_64x4",
+        sae_config=sae_options["standardx8.shakespeare_64x4"],
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            l1=(0.001, 0.001, 0.002, 0.003, 0.006),
+        ),
+    ),
     SAETrainingConfig(
         name="train.a.gated_v2x8.shakespeare_64x4",
         sae_config=sae_options["gated_v2x8.shakespeare_64x4"],
