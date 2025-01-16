@@ -18,6 +18,7 @@ class SAELossComponents:
     sparsity: torch.Tensor
     aux: torch.Tensor
     l0: torch.Tensor
+    stream_l1: torch.Tensor  # L1 of residual stream (useful for analysis)
 
     def __init__(
         self,
@@ -31,6 +32,7 @@ class SAELossComponents:
         self.sparsity = sparsity
         self.aux = aux
         self.l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
+        self.stream_l1 = F.l1_loss(x, torch.zeros_like(x))
 
     @property
     def total(self) -> torch.Tensor:

@@ -23,14 +23,24 @@ class SAETrainer(Trainer):
 
         # Only include metrics if in evaluation mode
         if is_eval:
-            l0s = torch.stack([loss_components.l0 for loss_components in output.sae_loss_components.values()])
+            # Add SAE metrics
+            sae_l0s = torch.stack([loss_components.l0 for loss_components in output.sae_loss_components.values()])
             metrics = {
                 "loss": loss,
                 "ce_loss": output.cross_entropy_loss,
                 "sae_losses": output.sae_losses,
                 "ce_loss_increases": output.ce_loss_increases,
-                "l0s": l0s,
+                "l0s": sae_l0s,
             }
+
+            # Add extra GPT metrics
+            metrics.update(
+                {
+                    "stream_l1s": torch.stack(
+                        [sae_loss_components.stream_l1 for sae_loss_components in output.sae_loss_components.values()]
+                    )
+                }
+            )
 
         return loss, metrics
 
