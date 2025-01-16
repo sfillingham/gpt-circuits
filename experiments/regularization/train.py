@@ -1,7 +1,7 @@
 """
 Train a GPT model with experimental SAE regularization.
 
-$ python -m experiments.regularization.shakespeare_64x4 --experiment=0
+$ python -m experiments.regularization.train --step=0
 """
 
 import argparse
@@ -14,17 +14,20 @@ import torch
 from config import TrainingConfig
 from config.gpt.models import GPTConfig, gpt_options
 from config.gpt.training import options as gpt_training_options
-from config.sae.models import SAEConfig, SAEVariant
+from config.sae.models import SAEConfig
 from config.sae.training import (
     LossCoefficients,
     SAETrainingConfig,
     shakespeare_64x4_defaults,
 )
-from config.sae.training import options as sae_training_options
 from experiments import ParameterSweeper
+from experiments.regularization.setup import GatedV2ExperimentSetup
 from training.gpt import GPTTrainer
 from training.sae.concurrent import ConcurrentTrainer
 from training.sae.regularization import RegularizationTrainer
+
+# Experiment setups are in setup.py
+setup = GatedV2ExperimentSetup()
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,8 +35,37 @@ def parse_args() -> argparse.Namespace:
     Parse command line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment", type=int, default=0, help="Which experiment to run")
+    parser.add_argument("--step", type=int, default=0, help="Which step to run")
     return parser.parse_args()
+
+
+def create_config(
+    name: str,
+    loss_coefficients: tuple[float, ...],
+    device: torch.device | None = None,
+    max_steps: int | None = None,
+) -> SAETrainingConfig:
+    """
+    Create configuration to be used for SAE training or GPT regularization.
+    """
+    config = SAETrainingConfig(
+        name=name,
+        sae_config=SAEConfig(
+            gpt_config=gpt_options["ascii_64x4"],
+            n_features=setup.n_features,
+            sae_variant=setup.sae_variant,
+        ),
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            l1=loss_coefficients,
+        ),
+    )
+
+    # Set optional args
+    config.device = device or config.device
+    config.max_steps = max_steps or config.max_steps
+
+    return config
 
 
 def sweep_training_parameters(
@@ -72,19 +104,7 @@ def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, 
     Train a model with specific loss coefficients and log results.
     """
     # Load configuration
-    config = SAETrainingConfig(
-        name=name,
-        device=device,
-        sae_config=SAEConfig(
-            gpt_config=gpt_options["ascii_64x4"],
-            n_features=tuple(64 * n for n in (8, 8, 32, 64, 64)),
-            sae_variant=SAEVariant.GATED_V2,
-        ),
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=loss_coefficients,
-        ),
-    )
+    config = create_config(name, loss_coefficients, device=device)
 
     # Train model
     trainer = ConcurrentTrainer(config, load_from=load_from)
@@ -105,7 +125,7 @@ if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
 
-    match args.experiment:
+    match args.step:
         case 0:
             """
             Train a GPT model
@@ -123,15 +143,14 @@ if __name__ == "__main__":
             Train a GPT model using SAE regularization
             """
             # Load configuration
-            config = sae_training_options["train.a.gated_v2x8.shakespeare_64x4"]
-            config.name = "experiments/regularization/shakespeare_64x4.regularized"
-            config.sae_config.n_features = tuple(64 * n for n in (8, 8, 32, 64, 64))
-            # Targeting l0s ~ 10.0
-            config.loss_coefficients.l1 = (0.11, 0.19, 1.3, 3.8, 4.1)
-            config.max_steps = 15000
+            config = create_config(
+                name="experiments/regularization/shakespeare_64x4.regularized",
+                loss_coefficients=setup.regularization_loss_coefficients,
+                max_steps=setup.regularization_max_steps,
+            )
 
             # Initialize trainer
-            trainer = RegularizationTrainer(config, torch.tensor(100.0))
+            trainer = RegularizationTrainer(config, torch.tensor(setup.regularization_coefficient))
             trainer.train()
 
         case 2:
@@ -139,19 +158,16 @@ if __name__ == "__main__":
             Train SAE layers for a GPT model
             """
             # Sweep loss coefficients
-            # The following coefficients yield l0s ~ 10.0: (0.4, 0.8, 7.5, 23.0, 40.0)
             parameter_sets = []
-            starting_coefficients = (0.2, 0.3, 2.5, 10.0, 18.0)
-            ending_coefficients = (1.0, 4.0, 20.0, 55.0, 90.0)
-            num_sweeps = 5
+            num_sweeps = setup.num_normal_sweeps
             for i in range(num_sweeps):
                 print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="experiments/regularization/sae.shakespeare_64x4.normal",
                     load_from=TrainingConfig.checkpoints_dir / "experiments/regularization/shakespeare_64x4.normal",
-                    starting_from=starting_coefficients,
-                    ending_with=ending_coefficients,
-                    steps=16,
+                    starting_from=setup.sweep_normal_starting_coefficients,
+                    ending_with=setup.sweep_normal_ending_coefficients,
+                    steps=setup.num_normal_steps,
                 )
 
         case 3:
@@ -159,20 +175,17 @@ if __name__ == "__main__":
             Train SAE layers for a GPT model created using SAE regularization
             """
             # Sweep loss coefficients
-            # The following coefficients yield l0s ~ 10.0: (0.15, 0.33, 1.5, 3.8, 4.1)
             parameter_sets = []
-            starting_coefficients = (0.04, 0.1, 0.8, 2.0, 2.0)
-            ending_coefficients = (0.80, 1.4, 5.0, 9.0, 9.0)
-            num_sweeps = 5
+            num_sweeps = setup.num_regularized_sweeps
             for i in range(num_sweeps):
                 print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="experiments/regularization/sae.shakespeare_64x4.regularized",
                     load_from=TrainingConfig.checkpoints_dir
                     / "experiments/regularization/shakespeare_64x4.regularized",
-                    starting_from=starting_coefficients,
-                    ending_with=ending_coefficients,
-                    steps=16,
+                    starting_from=setup.sweep_regularized_starting_coefficients,
+                    ending_with=setup.sweep_regularized_ending_coefficients,
+                    steps=setup.num_regularized_steps,
                 )
 
         case 4:
@@ -226,5 +239,5 @@ if __name__ == "__main__":
                     ]
                 )
 
-            with open(base_dir / "shakespeare_64x4.results.json", "w") as f:
+            with open(base_dir / f"{setup.experiment_name}.results.json", "w") as f:
                 json.dump(data, f, indent=4)
