@@ -8,7 +8,6 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from statistics import mean
 
 import pandas as pd
 import torch
@@ -26,15 +25,15 @@ from experiments import ParameterSweeper
 from experiments.regularization.setup import (  # noqa: F401
     GatedExperimentSetup,
     GatedV2ExperimentSetup,
+    LayersExperimentSetup,
     StandardExperimentSetup,
-    StandardV2ExperimentSetup,
 )
 from training.gpt import GPTTrainer
 from training.sae.concurrent import ConcurrentTrainer
 from training.sae.regularization import RegularizationTrainer
 
 # Experiment setups are in setup.py
-setup = StandardV2ExperimentSetup()
+setup = LayersExperimentSetup()
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,7 +47,8 @@ def parse_args() -> argparse.Namespace:
 
 def create_config(
     name: str,
-    loss_coefficients: tuple[float, ...],
+    l1_coefficients: tuple[float, ...],
+    trainable_layers: tuple[int, ...] | None = None,
     device: torch.device | None = None,
     max_steps: int | None = None,
 ) -> SAETrainingConfig:
@@ -64,8 +64,9 @@ def create_config(
         ),
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=loss_coefficients,
+            l1=l1_coefficients,
         ),
+        trainable_layers=trainable_layers,
     )
 
     # Set optional args
@@ -76,7 +77,12 @@ def create_config(
 
 
 def sweep_training_parameters(
-    name_prefix: str, load_from: Path, starting_from: tuple[float, ...], ending_with: tuple[float, ...], steps: int
+    name_prefix: str,
+    log_to: Path,
+    load_from: Path,
+    starting_from: tuple[float, ...],
+    ending_with: tuple[float, ...],
+    steps: int,
 ):
     """
     Sweep over a range of parameters.
@@ -87,8 +93,8 @@ def sweep_training_parameters(
             {
                 "name": f"{name_prefix}.{i}",
                 "load_from": load_from,
-                "log_to": TrainingConfig.checkpoints_dir / f"{name_prefix}.csv",
-                "loss_coefficients": coefficients,
+                "log_to": log_to,
+                "l1_coefficients": coefficients,
             }
         )
 
@@ -106,12 +112,12 @@ def sweep_training_parameters(
     sweeper.sweep()
 
 
-def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, loss_coefficients: tuple[float, ...]):
+def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, l1_coefficients: tuple[float, ...]):
     """
     Train a model with specific loss coefficients and log results.
     """
     # Load configuration
-    config = create_config(name, loss_coefficients, device=device)
+    config = create_config(name, l1_coefficients, device=device)
 
     # Train model
     trainer = ConcurrentTrainer(config, load_from=load_from)
@@ -120,7 +126,7 @@ def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, 
     # Log results
     for layer, coefficient, l0, ce_loss_increase in zip(
         [layer_name for layer_name in trainer.model.saes.keys()],
-        loss_coefficients,
+        l1_coefficients,
         trainer.checkpoint_l0s,
         trainer.checkpoint_ce_loss_increases,
     ):
@@ -131,6 +137,7 @@ def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, 
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
+    base_dir = TrainingConfig.checkpoints_dir / "regularization"
 
     match args.step:
         case 0:
@@ -139,11 +146,15 @@ if __name__ == "__main__":
             """
             # Load configuration
             config = gpt_training_options["shakespeare_64x4"]
-            config.name = "experiments/regularization/shakespeare_64x4.normal"
+            config.name = f"regularization/{setup.experiment_name}.model.normal"
 
             # Initialize trainer
             trainer = GPTTrainer(config)
             trainer.train()
+
+            # Log final CE loss
+            with (base_dir / f"{setup.experiment_name}.model.normal.csv").open("a") as f:
+                f.write(f"{trainer.best_val_loss:.4f}\n")
 
         case 1:
             """
@@ -151,14 +162,19 @@ if __name__ == "__main__":
             """
             # Load configuration
             config = create_config(
-                name="experiments/regularization/shakespeare_64x4.regularized",
-                loss_coefficients=setup.regularization_loss_coefficients,
+                name=f"regularization/{setup.experiment_name}.model.regularized",
+                l1_coefficients=setup.regularization_l1_coefficients,
                 max_steps=setup.regularization_max_steps,
+                trainable_layers=setup.regularization_trainable_layers,
             )
 
             # Initialize trainer
             trainer = RegularizationTrainer(config, torch.tensor(setup.regularization_coefficient))
             trainer.train()
+
+            # Log final CE loss
+            with (base_dir / f"{setup.experiment_name}.model.regularized.csv").open("a") as f:
+                f.write(f"{trainer.checkpoint_ce_loss:.4f}\n")
 
         case 2:
             """
@@ -170,8 +186,9 @@ if __name__ == "__main__":
             for i in range(num_sweeps):
                 print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
-                    name_prefix="experiments/regularization/sae.shakespeare_64x4.normal",
-                    load_from=TrainingConfig.checkpoints_dir / "experiments/regularization/shakespeare_64x4.normal",
+                    name_prefix="regularization/saes/normal",
+                    log_to=base_dir / f"{setup.experiment_name}.saes.normal.csv",
+                    load_from=base_dir / f"{setup.experiment_name}.model.normal",
                     starting_from=setup.sweep_normal_starting_coefficients,
                     ending_with=setup.sweep_normal_ending_coefficients,
                     steps=setup.num_normal_steps,
@@ -187,9 +204,9 @@ if __name__ == "__main__":
             for i in range(num_sweeps):
                 print(f"Starting parameter sweep {i+1}/{num_sweeps}")
                 sweep_training_parameters(
-                    name_prefix="experiments/regularization/sae.shakespeare_64x4.regularized",
-                    load_from=TrainingConfig.checkpoints_dir
-                    / "experiments/regularization/shakespeare_64x4.regularized",
+                    name_prefix="regularization/saes/regularized",
+                    log_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
+                    load_from=base_dir / f"{setup.experiment_name}.model.regularized",
                     starting_from=setup.sweep_regularized_starting_coefficients,
                     ending_with=setup.sweep_regularized_ending_coefficients,
                     steps=setup.num_regularized_steps,
@@ -199,15 +216,14 @@ if __name__ == "__main__":
             """
             Process CSV files and export results.json
             """
-            base_dir = TrainingConfig.checkpoints_dir / "experiments/regularization"
             column_names = ["layer", "coefficient", "l0", "ce_loss_increase"]
             normal_csv = pd.read_csv(
-                base_dir / "sae.shakespeare_64x4.normal.csv",
+                base_dir / f"{setup.experiment_name}.saes.normal.csv",
                 header=None,
                 names=column_names,
             )
             regularized_csv = pd.read_csv(
-                base_dir / "sae.shakespeare_64x4.regularized.csv",
+                base_dir / f"{setup.experiment_name}.saes.regularized.csv",
                 header=None,
                 names=column_names,
             )
@@ -234,19 +250,21 @@ if __name__ == "__main__":
                 data["original"].append(
                     [
                         {
-                            "x": mean([row.l0 for row in row_set]),
+                            "coefficient": coefficient,
+                            "x": [row.l0 for row in row_set],
                             "y": [row.ce_loss_increase for row in row_set],
                         }
-                        for _, row_set in sorted_normal_data
+                        for coefficient, row_set in sorted_normal_data
                     ]
                 )
                 data["regularized"].append(
                     [
                         {
-                            "x": mean([row.l0 for row in row_set]),
+                            "coefficient": coefficient,
+                            "x": [row.l0 for row in row_set],
                             "y": [row.ce_loss_increase for row in row_set],
                         }
-                        for _, row_set in sorted_regularized_data
+                        for coefficient, row_set in sorted_regularized_data
                     ]
                 )
 

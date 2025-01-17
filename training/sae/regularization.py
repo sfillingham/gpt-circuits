@@ -31,6 +31,7 @@ class RegularizationTrainer(SAETrainer):
     """
 
     λ: torch.Tensor  # Regularization coefficient (applied to reconstruction loss)
+    checkpoint_ce_loss: torch.Tensor  # Cross-entropy loss for saved checkpoint
 
     def __init__(self, config: SAETrainingConfig, λ=torch.tensor(1.0)):
         """
@@ -40,6 +41,7 @@ class RegularizationTrainer(SAETrainer):
 
         # create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
+        self.checkpoint_ce_loss = torch.tensor(float("inf"), device=config.device)
 
         super().__init__(model, config)
 
@@ -59,6 +61,13 @@ class RegularizationTrainer(SAETrainer):
         regularization_term = (reconstruct_losses * self.λ + sparcity_losses + aux_losses * self.λ).mean()
 
         return output.cross_entropy_loss + regularization_term
+
+    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor, metrics: dict[str, torch.Tensor]):
+        """
+        Save CE loss when saving checkpoint.
+        """
+        super().save_checkpoint(model, is_best, metrics)
+        self.checkpoint_ce_loss = metrics["ce_loss"]
 
 
 if __name__ == "__main__":
