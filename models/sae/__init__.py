@@ -18,7 +18,8 @@ class SAELossComponents:
     sparsity: torch.Tensor
     aux: torch.Tensor
     l0: torch.Tensor
-    stream_l1: torch.Tensor  # L1 of residual stream (useful for analysis)
+    x_norm: torch.Tensor  # L2 norm of input (useful for experiments)
+    x_l1: torch.Tensor  # L1 of residual stream (useful for analytics)
 
     def __init__(
         self,
@@ -26,13 +27,14 @@ class SAELossComponents:
         x_reconstructed: torch.Tensor,
         feature_magnitudes: torch.Tensor,
         sparsity: torch.Tensor,
-        aux: torch.Tensor = torch.tensor(0.0),
+        aux: Optional[torch.Tensor] = None,
     ):
         self.reconstruct = F.mse_loss(x, x_reconstructed)
         self.sparsity = sparsity
-        self.aux = aux
+        self.aux = aux if aux is not None else torch.tensor(0.0, device=x.device)
         self.l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
-        self.stream_l1 = F.l1_loss(x, torch.zeros_like(x))
+        self.x_norm = torch.norm(x)
+        self.x_l1 = F.l1_loss(x, torch.zeros_like(x))
 
     @property
     def total(self) -> torch.Tensor:

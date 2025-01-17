@@ -30,7 +30,7 @@ class RegularizationTrainer(SAETrainer):
     Experimental trainer that adds SAE regularization to GPT training.
     """
 
-    λ: torch.Tensor  # Regularization coefficient
+    λ: torch.Tensor  # Regularization coefficient (applied to reconstruction loss)
 
     def __init__(self, config: SAETrainingConfig, λ=torch.tensor(1.0)):
         """
@@ -45,9 +45,20 @@ class RegularizationTrainer(SAETrainer):
 
     def output_to_loss(self, output: SparsifiedGPTOutput) -> torch.Tensor:
         """
-        Add mean SAE loss to GPT cross-entropy loss.
+        Add SAE loss components to GPT cross-entropy loss.
         """
-        return output.cross_entropy_loss + (self.λ * output.sae_losses).mean()
+        # Scale losses based on MSE by input norms to avoid weight shrinkage during training.
+        x_norms = torch.stack([loss.x_norm for loss in output.sae_loss_components.values()])
+        reconstruct_losses = torch.stack([loss.reconstruct for loss in output.sae_loss_components.values()]) / x_norms
+        aux_losses = torch.stack([loss.aux for loss in output.sae_loss_components.values()]) / x_norms
+
+        # Sparcity loss doesn't scale with input norms.
+        sparcity_losses = torch.stack([loss.sparsity for loss in output.sae_loss_components.values()])
+
+        # Only scale MSE-based losses by λ when computing the regularization term.
+        regularization_term = (reconstruct_losses * self.λ + sparcity_losses + aux_losses * self.λ).mean()
+
+        return output.cross_entropy_loss + regularization_term
 
 
 if __name__ == "__main__":
@@ -62,5 +73,5 @@ if __name__ == "__main__":
     config.name = args.name
 
     # Initialize trainer
-    trainer = RegularizationTrainer(config, torch.tensor(1.0))
+    trainer = RegularizationTrainer(config, torch.tensor(10000.0))
     trainer.train()

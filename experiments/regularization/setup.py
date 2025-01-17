@@ -11,20 +11,19 @@ class StandardExperimentSetup:
     n_features: tuple[int, ...] = tuple(64 * n for n in (8, 8, 32, 64, 64))
 
     # Regularization parameters
-    regularization_coefficient: float = 1.0
-    regularization_loss_coefficients = (0.0002, 0.0010, 0.0035, 0.0040, 0.0065)  # Targets l0s ~ 10
+    regularization_coefficient: float = 10000.0
+    regularization_loss_coefficients = (0.01, 0.03, 0.05, 0.06, 0.07)  # Targets l0s ~ 10
     regularization_max_steps = 15000
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.0001, 0.0002, 0.0006, 0.0010, 0.0030)
-    sweep_normal_ending_coefficients = (0.0020, 0.0040, 0.0100, 0.0100, 0.0200)
+    sweep_normal_starting_coefficients = (0.00015, 0.0002, 0.0010, 0.0010, 0.0040)
+    sweep_normal_ending_coefficients = (0.0016, 0.0030, 0.0100, 0.0100, 0.0120)
     num_normal_sweeps = 1
     num_normal_steps = 8
 
     # Sweep range for SAE training on model using regularized weights
-    # The following coefficients yield l0s ~ 10.0: (0.15, 0.33, 1.5, 3.8, 4.1)
-    sweep_regularized_starting_coefficients = (0.0001, 0.0003, 0.0010, 0.0015, 0.0030)
-    sweep_regularized_ending_coefficients = (0.0010, 0.0050, 0.0100, 0.0100, 0.0150)
+    sweep_regularized_starting_coefficients = (0.0001, 0.0001, 0.0003, 0.0004, 0.0008)
+    sweep_regularized_ending_coefficients = (0.0008, 0.0015, 0.0030, 0.0030, 0.0020)
     num_regularized_sweeps = 1
     num_regularized_steps = 8
 

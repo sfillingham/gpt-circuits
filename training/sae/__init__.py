@@ -37,7 +37,7 @@ class SAETrainer(Trainer):
             metrics.update(
                 {
                     "stream_l1s": torch.stack(
-                        [sae_loss_components.stream_l1 for sae_loss_components in output.sae_loss_components.values()]
+                        [sae_loss_components.x_l1 for sae_loss_components in output.sae_loss_components.values()]
                     )
                 }
             )
