@@ -131,7 +131,7 @@ def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, 
         trainer.checkpoint_ce_loss_increases,
     ):
         with log_to.open("a") as f:
-            f.write(f"{layer},{coefficient:.4f},{l0:.4f},{ce_loss_increase:.4f}\n")
+            f.write(f"{layer},{coefficient:.6f},{l0:.6f},{ce_loss_increase:.6f}\n")
 
 
 if __name__ == "__main__":
