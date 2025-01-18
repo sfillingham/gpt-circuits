@@ -38,6 +38,9 @@ class LayersExperimentSetup(StandardExperimentSetup):
     regularization_l1_coefficients = (0.0, 0.0, 0.0, 0.03, 0.03)  # Targets l0s ~ 10
     regularization_trainable_layers = (3, 4)
 
+    # Regularization parameters
+    regularization_max_steps = 10000
+
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.00006, 0.0002, 0.0006, 0.0010, 0.0026)
     sweep_normal_ending_coefficients = (0.00028, 0.0018, 0.0050, 0.0050, 0.0100)
