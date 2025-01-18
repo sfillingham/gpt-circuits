@@ -35,7 +35,20 @@ class LayersExperimentSetup(StandardExperimentSetup):
     """
 
     experiment_name: str = "layers"
+    regularization_l1_coefficients = (0.0, 0.0, 0.0, 0.03, 0.03)  # Targets l0s ~ 10
     regularization_trainable_layers = (3, 4)
+
+    # Sweep range for SAE training on model using normal weights
+    sweep_normal_starting_coefficients = (0.00005, 0.0002, 0.0007, 0.0010, 0.0026)
+    sweep_normal_ending_coefficients = (0.0004, 0.0018, 0.0050, 0.0050, 0.0100)
+    num_normal_sweeps = 1
+    num_normal_steps = 8
+
+    # Sweep range for SAE training on model using regularized weights
+    sweep_regularized_starting_coefficients = (0.00005, 0.0001, 0.0003, 0.0004, 0.0006)
+    sweep_regularized_ending_coefficients = (0.0003, 0.0009, 0.0025, 0.0015, 0.0016)
+    num_regularized_sweeps = 1
+    num_regularized_steps = 8
 
 
 class GatedExperimentSetup:

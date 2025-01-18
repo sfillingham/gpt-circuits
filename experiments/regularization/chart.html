@@ -61,6 +61,21 @@
                 type: "logarithmic",
               },
             },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return (
+                      (ctx.raw.coefficient
+                        ? `L1 Coefficient: ${ctx.raw.coefficient.toFixed(4)} | `
+                        : "") +
+                      `L0: ${ctx.raw.x.toFixed(1)} ` +
+                      `| CE Loss Increase: ${ctx.raw.y.toFixed(4)}`
+                    );
+                  },
+                },
+              },
+            },
           },
         });
       }
@@ -72,7 +87,8 @@
         function transformData(data) {
           return data.map((row) =>
             row.map((item) => ({
-              x: Array.isArray(item.x) ? item.y.reduce((acc, val) => acc + val, 0) : item.x,
+              coefficient: item.coefficient,
+              x: Array.isArray(item.x) ? item.x.reduce((acc, val) => acc + val, 0) : item.x,
               y: Array.isArray(item.y) ? item.y.reduce((acc, val) => acc + val, 0) : item.y,
             }))
           );
