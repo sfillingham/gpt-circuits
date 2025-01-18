@@ -26,6 +26,9 @@ class SparsifiedGPTOutput:
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
     ce_loss_increases: Optional[torch.Tensor]
+    # End-to-end CE loss increase if using SAE reconstructions for trainable layers
+    e2e_kl_div: Optional[torch.Tensor]
+    e2e_ce_loss_increase: Optional[torch.Tensor]
     sae_loss_components: dict[int, SAELossComponents]
 
     @property
@@ -57,6 +60,9 @@ class SparsifiedGPT(nn.Module):
         self.layer_idxs = trainable_layers if trainable_layers else list(range(len(config.n_features)))
         self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in self.layer_idxs]))
 
+        # Should SAEs patch activations?
+        self.should_patch_activations = False
+
     def forward(self, idx, targets=None, is_eval: bool = False) -> SparsifiedGPTOutput:
         """
         Forward pass of the sparsified model.
@@ -64,9 +70,12 @@ class SparsifiedGPT(nn.Module):
         with self.use_saes() as encoder_outputs:
             logits, cross_entropy_loss = self.gpt(idx, targets)
 
-        # Calculate cross-entropy loss increase for each SAE layer if targets are provided during training evaluation.
+        # If targets are provided during training evaluation, gather more metrics
         ce_loss_increases = None
+        e2e_ce_loss_increase = None
+        e2e_kl_div = None
         if targets is not None and is_eval:
+            # Calculate cross-entropy loss increase for each SAE layer
             ce_loss_increases = []
             for layer_idx, output in encoder_outputs.items():
                 x = output.reconstructed_activations
@@ -75,10 +84,25 @@ class SparsifiedGPT(nn.Module):
                 ce_loss_increases.append(sae_ce_loss - cross_entropy_loss)
             ce_loss_increases = torch.stack(ce_loss_increases)
 
+            # Calculate end-to-end metrics
+            with self.use_saes():
+                # SAEs should patch the residual stream.
+                self.should_patch_activations = True
+                e2e_logits, e2e_cross_entropy_loss = self.gpt(idx, targets)
+                e2e_ce_loss_increase = e2e_cross_entropy_loss - cross_entropy_loss
+                e2e_kl_div = F.kl_div(
+                    F.log_softmax(e2e_logits, dim=-1),
+                    F.softmax(logits, dim=-1),
+                    reduction="batchmean",
+                )
+                self.should_patch_activations = False
+
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
             ce_loss_increases=ce_loss_increases,
+            e2e_kl_div=e2e_kl_div,
+            e2e_ce_loss_increase=e2e_ce_loss_increase,
             sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
         )
 
@@ -99,7 +123,7 @@ class SparsifiedGPT(nn.Module):
             sae = self.saes[f"{layer_idx}"]
             # Output values will be overwritten (hack to pass object by reference)
             output = EncoderOutput(torch.tensor(0), torch.tensor(0))
-            hooks.append(target.register_forward_pre_hook(self.create_hook(sae, output)))
+            hooks.append(target.register_forward_pre_hook(self.create_hook(sae, output, layer_idx)))
             encoder_outputs[layer_idx] = output
 
         try:
@@ -110,18 +134,23 @@ class SparsifiedGPT(nn.Module):
             for hook in hooks:
                 hook.remove()
 
-    def create_hook(self, sae, output):
+    def create_hook(self, sae, output, layer_idx):
         """
         Create a forward pre-hook for the given layer index.
 
         :param sae: SAE module to use for the forward pass.
         :param output: Encoder output to be updated.
+        :param layer_idx: Layer index.
         """
 
         def hook(_, inputs):
             x = inputs[0]
             # Override field values instead of replacing reference
             output.__dict__ = sae(x).__dict__
+
+            # Patch activations if needed
+            if self.should_patch_activations and layer_idx > 1:
+                return (output.reconstructed_activations,)
 
         return hook
 

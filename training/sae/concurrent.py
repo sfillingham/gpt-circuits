@@ -38,6 +38,8 @@ class ConcurrentTrainer(SAETrainer):
 
     checkpoint_l0s: torch.Tensor
     checkpoint_ce_loss_increases: torch.Tensor
+    checkpoint_e2e_kl_div: torch.Tensor
+    checkpoint_e2e_ce_loss_increase: torch.Tensor
 
     def __init__(self, config: SAETrainingConfig, load_from: str | Path):
         """
@@ -47,6 +49,8 @@ class ConcurrentTrainer(SAETrainer):
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
         self.checkpoint_l0s = torch.zeros((len(model.saes),), device=config.device)
         self.checkpoint_ce_loss_increases = torch.zeros((len(model.saes),), device=config.device)
+        self.checkpoint_e2e_kl_div = torch.tensor(0.0, device=config.device)
+        self.checkpoint_e2e_ce_loss_increase = torch.tensor(0.0, device=config.device)
 
         # Load GPT weights
         model.load_gpt_weights(load_from)
@@ -81,6 +85,8 @@ class ConcurrentTrainer(SAETrainer):
         # Update checkpoint metrics
         self.checkpoint_l0s[is_best] = metrics["l0s"][is_best]
         self.checkpoint_ce_loss_increases[is_best] = metrics["ce_loss_increases"][is_best]
+        self.checkpoint_e2e_kl_div = metrics["e2e_kl_div"]
+        self.checkpoint_e2e_ce_loss_increase = metrics["e2e_ce_loss_increase"]
 
     def train(self):
         """
@@ -91,6 +97,8 @@ class ConcurrentTrainer(SAETrainer):
             {
                 "checkpoint_l0s": self.checkpoint_l0s,
                 "checkpoint_ce_loss_increases": self.checkpoint_ce_loss_increases,
+                "checkpoint_e2e_kl_div": self.checkpoint_e2e_kl_div,
+                "checkpoint_e2e_ce_loss_increase": self.checkpoint_e2e_ce_loss_increase,
             },
             Trainer.LogDestination.DEBUG,
         )

@@ -23,17 +23,15 @@ from config.sae.training import (
 )
 from experiments import ParameterSweeper
 from experiments.regularization.setup import (  # noqa: F401
-    GatedExperimentSetup,
-    GatedV2ExperimentSetup,
-    LayersExperimentSetup,
-    StandardExperimentSetup,
+    RegularizeAllLayersExperiment,
+    RegularizeLastLayersExperiment,
 )
 from training.gpt import GPTTrainer
 from training.sae.concurrent import ConcurrentTrainer
 from training.sae.regularization import RegularizationTrainer
 
 # Experiment setups are in setup.py
-setup = LayersExperimentSetup()
+setup = RegularizeAllLayersExperiment()
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,14 +144,14 @@ if __name__ == "__main__":
             """
             # Load configuration
             config = gpt_training_options["shakespeare_64x4"]
-            config.name = f"regularization/{setup.experiment_name}.model.normal"
+            config.name = "regularization/model.normal"
 
             # Initialize trainer
             trainer = GPTTrainer(config)
             trainer.train()
 
             # Log final CE loss
-            with (base_dir / f"{setup.experiment_name}.model.normal.csv").open("a") as f:
+            with (base_dir / "model.normal.csv").open("a") as f:
                 f.write(f"{trainer.best_val_loss:.4f}\n")
 
         case 1:
@@ -182,16 +180,15 @@ if __name__ == "__main__":
             """
             # Sweep loss coefficients
             parameter_sets = []
-            num_sweeps = setup.num_normal_sweeps
-            for i in range(num_sweeps):
-                print(f"Starting parameter sweep {i+1}/{num_sweeps}")
+            for i in range(setup.num_sweeps):
+                print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="regularization/saes/normal",
-                    log_to=base_dir / f"{setup.experiment_name}.saes.normal.csv",
-                    load_from=base_dir / f"{setup.experiment_name}.model.normal",
+                    log_to=base_dir / "saes.normal.csv",
+                    load_from=base_dir / "model.normal",
                     starting_from=setup.sweep_normal_starting_coefficients,
                     ending_with=setup.sweep_normal_ending_coefficients,
-                    steps=setup.num_normal_steps,
+                    steps=setup.num_sweep_steps,
                 )
 
         case 3:
@@ -200,16 +197,15 @@ if __name__ == "__main__":
             """
             # Sweep loss coefficients
             parameter_sets = []
-            num_sweeps = setup.num_regularized_sweeps
-            for i in range(num_sweeps):
-                print(f"Starting parameter sweep {i+1}/{num_sweeps}")
+            for i in range(setup.num_sweeps):
+                print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="regularization/saes/regularized",
                     log_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
                     load_from=base_dir / f"{setup.experiment_name}.model.regularized",
                     starting_from=setup.sweep_regularized_starting_coefficients,
                     ending_with=setup.sweep_regularized_ending_coefficients,
-                    steps=setup.num_regularized_steps,
+                    steps=setup.num_sweep_steps,
                 )
 
         case 4:
@@ -218,7 +214,7 @@ if __name__ == "__main__":
             """
             column_names = ["layer", "coefficient", "l0", "ce_loss_increase"]
             normal_csv = pd.read_csv(
-                base_dir / f"{setup.experiment_name}.saes.normal.csv",
+                base_dir / "saes.normal.csv",
                 header=None,
                 names=column_names,
             )

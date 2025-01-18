@@ -60,14 +60,8 @@ if __name__ == "__main__":
             """
             Copy model weights from prior experiment.
             """
-            experiment_name = "layers"
-
-            # Copy normal model
-            src_dir = base_dir / f"{experiment_name}.model.normal"
-            dst_dir = base_dir / "eval.model.normal"
-            shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
-
             # Copy regularized model
+            experiment_name = "all-layers"
             src_dir = base_dir / f"{experiment_name}.model.regularized"
             dst_dir = base_dir / "eval.model.regularized"
             shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
@@ -76,30 +70,50 @@ if __name__ == "__main__":
             """
             Train SAE layers on GPT model with normal weights.
             """
-            config = create_training_config(
-                name="eval.saes.normal",
-                l1_coefficients=(0.0, 0.0, 0.0, 0.0, 0.0),  # TODO: Set L1 coefficients
-            )
+            for l0, l1_coefficients in {
+                10: (0.00009, 0.0002, 0.0006, 0.0010, 0.0032),
+                20: (0.00025, 0.0020, 0.0050, 0.0050, 0.0120),
+                30: (0.00025, 0.0020, 0.0050, 0.0050, 0.0120),
+            }.items():
+                config = create_training_config(
+                    name="eval.saes.normal",
+                    l1_coefficients=l1_coefficients,
+                )
 
-            # Train model
-            trainer = ConcurrentTrainer(config, load_from=base_dir / "eval.model.normal")
-            trainer.train()
+                # Train model
+                trainer = ConcurrentTrainer(config, load_from=base_dir / "model.normal")
+                trainer.train()
+
+                # Export metrics to csv
+                with (base_dir / "eval.model.normal.csv").open("a") as f:
+                    f.write(
+                        f"{', '.join(map(str, trainer.checkpoint_l0s))}, "
+                        f"{trainer.checkpoint_e2e_ce_loss_increase:.4f}, "
+                        f"{trainer.checkpoint_e2e_kl_div:.4f}\n"
+                    )
 
         case 2:
             """
             Train SAE layers on GPT model with regularized weights.
             """
-            config = create_training_config(
-                name="eval.saes.regularized",
-                l1_coefficients=(0.0, 0.0, 0.0, 0.0, 0.0),  # TODO: Set L1 coefficients
-            )
+            for l0, l1_coefficients in {
+                10: (0.00009, 0.0002, 0.0006, 0.0010, 0.0032),
+                20: (0.00025, 0.0020, 0.0050, 0.0050, 0.0120),
+                30: (0.00025, 0.0020, 0.0050, 0.0050, 0.0120),
+            }.items():
+                config = create_training_config(
+                    name="eval.saes.regularized",
+                    l1_coefficients=l1_coefficients,
+                )
 
-            # Train model
-            trainer = ConcurrentTrainer(config, load_from=base_dir / "eval.model.regularized")
-            trainer.train()
+                # Train model
+                trainer = ConcurrentTrainer(config, load_from=base_dir / "model.regularized")
+                trainer.train()
 
-        case 3:
-            """
-            Evaluate SAE differences.
-            """
-            pass
+                # Export metrics to csv
+                with (base_dir / "eval.model.regularized.csv").open("a") as f:
+                    f.write(
+                        f"{', '.join(map(str, trainer.checkpoint_l0s))}, "
+                        f"{trainer.checkpoint_e2e_ce_loss_increase:.4f}, "
+                        f"{trainer.checkpoint_e2e_kl_div:.4f}\n"
+                    )

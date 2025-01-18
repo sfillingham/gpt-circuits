@@ -30,6 +30,8 @@ class SAETrainer(Trainer):
                 "ce_loss": output.cross_entropy_loss,
                 "sae_losses": output.sae_losses,
                 "ce_loss_increases": output.ce_loss_increases,
+                "e2e_kl_div": output.e2e_kl_div,
+                "e2e_ce_loss_increase": output.e2e_ce_loss_increase,
                 "l0s": sae_l0s,
             }
 
