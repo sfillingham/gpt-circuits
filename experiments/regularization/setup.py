@@ -42,14 +42,14 @@ class LayersExperimentSetup(StandardExperimentSetup):
     regularization_max_steps = 10000
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.00006, 0.0002, 0.0006, 0.0010, 0.0026)
-    sweep_normal_ending_coefficients = (0.00028, 0.0018, 0.0050, 0.0050, 0.0100)
+    sweep_normal_starting_coefficients = (0.00006, 0.0002, 0.0006, 0.0010, 0.0032)
+    sweep_normal_ending_coefficients = (0.00025, 0.0020, 0.0050, 0.0050, 0.0120)
     num_normal_sweeps = 1
     num_normal_steps = 8
 
     # Sweep range for SAE training on model using regularized weights
     sweep_regularized_starting_coefficients = (0.00005, 0.00012, 0.00030, 0.00035, 0.00050)
-    sweep_regularized_ending_coefficients = (0.00025, 0.00090, 0.00250, 0.00150, 0.00160)
+    sweep_regularized_ending_coefficients = (0.00025, 0.00090, 0.00250, 0.00135, 0.00160)
     num_regularized_sweeps = 1
     num_regularized_steps = 8
 
