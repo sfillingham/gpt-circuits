@@ -40,21 +40,9 @@ sae_options: dict[str, SAEConfig] = map_options(
         sae_variant=SAEVariant.STANDARD,
     ),
     SAEConfig(
-        name="standard_v2x8.shakespeare_64x4",
-        gpt_config=gpt_options["ascii_64x4"],
-        n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
-        sae_variant=SAEVariant.STANDARD_V2,
-    ),
-    SAEConfig(
         name="gated_v2x8.shakespeare_64x4",
         gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
-        sae_variant=SAEVariant.GATED_V2,
-    ),
-    SAEConfig(
-        name="gated_v2x32.shakespeare_64x4",
-        gpt_config=gpt_options["ascii_64x4"],
-        n_features=tuple(64 * n for n in (32, 32, 32, 32, 32)),
         sae_variant=SAEVariant.GATED_V2,
     ),
 )

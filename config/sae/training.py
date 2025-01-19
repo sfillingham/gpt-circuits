@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+import torch
+
 from config import TrainingConfig, map_options
 
 from .models import SAEConfig, sae_options
@@ -8,7 +10,8 @@ from .models import SAEConfig, sae_options
 
 @dataclass
 class LossCoefficients:
-    l1: tuple = ()
+    l1: tuple[float, ...] = ()
+    regularization: Optional[torch.Tensor] = None  # For experiments
 
 
 @dataclass
@@ -36,7 +39,7 @@ shakespeare_64x4_defaults = {
 # Training configuration options
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
-        name="train.a.standardx8.shakespeare_64x4",
+        name="standardx8.shakespeare_64x4.v0",
         sae_config=sae_options["standardx8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
@@ -44,51 +47,12 @@ options: dict[str, SAETrainingConfig] = map_options(
         ),
     ),
     SAETrainingConfig(
-        name="train.a.standard_v2x8.shakespeare_64x4",
-        sae_config=sae_options["standard_v2x8.shakespeare_64x4"],
+        name="standardx8.shakespeare_64x4.v1",
+        sae_config=sae_options["standardx8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(0.0008, 0.0008, 0.0018, 0.0025, 0.0045),
-        ),
-    ),
-    SAETrainingConfig(
-        name="train.b.standard_v2x8.shakespeare_64x4",
-        sae_config=sae_options["standard_v2x8.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(0.1, 0.1, 0.2, 0.2, 0.2),
-        ),
-    ),
-    SAETrainingConfig(
-        name="train.a.gated_v2x8.shakespeare_64x4",
-        sae_config=sae_options["gated_v2x8.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(0.5, 0.5, 1.5, 2.0, 3.0),
-        ),
-    ),
-    SAETrainingConfig(
-        name="train.b.gated_v2x8.shakespeare_64x4",
-        sae_config=sae_options["gated_v2x8.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(0.5, 0.5, 1.0, 1.5, 2.0),
-        ),
-    ),
-    SAETrainingConfig(
-        name="train.c.gated_v2x32.shakespeare_64x4",
-        sae_config=sae_options["gated_v2x32.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(2.0, 2.0, 6.0, 8.0, 12.0),
-        ),
-    ),
-    SAETrainingConfig(
-        name="train.d.gated_v2x32.shakespeare_64x4",
-        sae_config=sae_options["gated_v2x32.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            l1=(2.0, 2.0, 4.0, 5.5, 8.0),
+            l1=(0.01, 0.03, 0.05, 0.05, 0.05),
+            regularization=torch.tensor(10000.0),
         ),
     ),
 )

@@ -2,8 +2,7 @@
 Train a GPT model with experimental SAE regularization. By adding SAE regularization to GPT training,
 we hope to generate GPT model weights are amenable to producing sparser and higher quality SAE features.
 
-$ python -m training.sae.regularization --config=train.b.standard_v2x8.shakespeare_64x4 --name=standard_v2_sparse_shakespeare_64x4
-$ python -m training.sae.regularization --config=train.b.gated_v2x8.shakespeare_64x4 --name=sparse_shakespeare_64x4
+$ python -m training.sae.regularization --config=standardx8.shakespeare_64x4.v1 --name=shakespeare_64x4.regularized
 """
 
 import argparse
@@ -37,7 +36,7 @@ class RegularizationTrainer(SAETrainer):
         """
         Load new sparsified GPT model from config.
         """
-        self.λ = λ.to(config.device)
+        self.λ = (config.loss_coefficients.regularization or torch.tensor(1.0)).to(config.device)
 
         # create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
@@ -82,5 +81,5 @@ if __name__ == "__main__":
     config.name = args.name
 
     # Initialize trainer
-    trainer = RegularizationTrainer(config, torch.tensor(10000.0))
+    trainer = RegularizationTrainer(config)
     trainer.train()

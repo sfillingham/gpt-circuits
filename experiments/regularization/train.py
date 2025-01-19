@@ -45,7 +45,6 @@ def create_config(
     l1_coefficients: tuple[float, ...],
     trainable_layers: tuple[int, ...] | None = None,
     device: torch.device | None = None,
-    max_steps: int | None = None,
 ) -> SAETrainingConfig:
     """
     Create configuration to be used for SAE training or GPT regularization.
@@ -66,7 +65,6 @@ def create_config(
 
     # Set optional args
     config.device = device or config.device
-    config.max_steps = max_steps or config.max_steps
 
     return config
 
@@ -179,12 +177,13 @@ if __name__ == "__main__":
             config = create_config(
                 name=f"regularization/{setup.experiment_name}.model.regularized",
                 l1_coefficients=setup.regularization_l1_coefficients,
-                max_steps=setup.regularization_max_steps,
                 trainable_layers=setup.regularization_trainable_layers,
             )
+            config.max_steps = setup.regularization_max_steps
+            config.loss_coefficients.regularization = setup.regularization_coefficient
 
             # Initialize trainer
-            trainer = RegularizationTrainer(config, torch.tensor(setup.regularization_coefficient))
+            trainer = RegularizationTrainer(config)
             trainer.train()
 
             # Log final CE loss
