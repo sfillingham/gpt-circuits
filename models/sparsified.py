@@ -143,7 +143,10 @@ class SparsifiedGPT(nn.Module):
         :param layer_idx: Layer index.
         """
 
+        # TODO: Figure out to enable torch.compile for hooks
+        @torch.compiler.disable
         def hook(_, inputs):
+
             x = inputs[0]
             # Override field values instead of replacing reference
             output.__dict__ = sae(x).__dict__

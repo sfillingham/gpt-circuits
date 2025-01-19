@@ -22,10 +22,7 @@ from config.sae.training import (
     shakespeare_64x4_defaults,
 )
 from experiments import ParameterSweeper
-from experiments.regularization.setup import (  # noqa: F401
-    RegularizeAllLayersExperiment,
-    RegularizeLastLayersExperiment,
-)
+from experiments.regularization.setup import RegularizeAllLayersExperiment  # noqa: F401
 from training.gpt import GPTTrainer
 from training.sae.concurrent import ConcurrentTrainer
 from training.sae.regularization import RegularizationTrainer
@@ -76,7 +73,8 @@ def create_config(
 
 def sweep_training_parameters(
     name_prefix: str,
-    log_to: Path,
+    log_layers_to: Path,
+    log_e2e_to: Path,
     load_from: Path,
     starting_from: tuple[float, ...],
     ending_with: tuple[float, ...],
@@ -91,7 +89,8 @@ def sweep_training_parameters(
             {
                 "name": f"{name_prefix}.{i}",
                 "load_from": load_from,
-                "log_to": log_to,
+                "log_layers_to": log_layers_to,
+                "log_e2e_to": log_e2e_to,
                 "l1_coefficients": coefficients,
             }
         )
@@ -110,7 +109,14 @@ def sweep_training_parameters(
     sweeper.sweep()
 
 
-def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, l1_coefficients: tuple[float, ...]):
+def train_model(
+    name: str,
+    load_from: Path,
+    log_layers_to: Path,
+    log_e2e_to: Path,
+    device: torch.device,
+    l1_coefficients: tuple[float, ...],
+):
     """
     Train a model with specific loss coefficients and log results.
     """
@@ -121,15 +127,24 @@ def train_model(name: str, load_from: Path, log_to: Path, device: torch.device, 
     trainer = ConcurrentTrainer(config, load_from=load_from)
     trainer.train()
 
-    # Log results
+    # Log layers
     for layer, coefficient, l0, ce_loss_increase in zip(
         [layer_name for layer_name in trainer.model.saes.keys()],
         l1_coefficients,
         trainer.checkpoint_l0s,
         trainer.checkpoint_ce_loss_increases,
     ):
-        with log_to.open("a") as f:
+        with log_layers_to.open("a") as f:
             f.write(f"{layer},{coefficient:.6f},{l0:.6f},{ce_loss_increase:.6f}\n")
+
+    # Log end-to-end metrics
+    with log_e2e_to.open("a") as f:
+        data = []
+        data.append(round(sum(l1_coefficients), 6))
+        data.append(round(sum(trainer.checkpoint_l0s.tolist()), 6))
+        data.append(round(trainer.checkpoint_e2e_ce_loss_increase.item(), 6))
+        data.append(round(trainer.checkpoint_e2e_kl_div.item(), 6))
+        f.write(",".join(map(str, data)) + "\n")
 
 
 if __name__ == "__main__":
@@ -145,6 +160,8 @@ if __name__ == "__main__":
             # Load configuration
             config = gpt_training_options["shakespeare_64x4"]
             config.name = "regularization/model.normal"
+            # Train for same duration
+            config.max_steps = setup.regularization_max_steps
 
             # Initialize trainer
             trainer = GPTTrainer(config)
@@ -184,7 +201,8 @@ if __name__ == "__main__":
                 print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="regularization/saes/normal",
-                    log_to=base_dir / "saes.normal.csv",
+                    log_layers_to=base_dir / "saes.normal.csv",
+                    log_e2e_to=base_dir / "e2e.normal.csv",
                     load_from=base_dir / "model.normal",
                     starting_from=setup.sweep_normal_starting_coefficients,
                     ending_with=setup.sweep_normal_ending_coefficients,
@@ -201,7 +219,8 @@ if __name__ == "__main__":
                 print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
                 sweep_training_parameters(
                     name_prefix="regularization/saes/regularized",
-                    log_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
+                    log_layers_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
+                    log_e2e_to=base_dir / f"{setup.experiment_name}.e2e.regularized.csv",
                     load_from=base_dir / f"{setup.experiment_name}.model.regularized",
                     starting_from=setup.sweep_regularized_starting_coefficients,
                     ending_with=setup.sweep_regularized_ending_coefficients,

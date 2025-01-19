@@ -19,8 +19,8 @@ class StandardExperiment:
     regularization_max_steps = 15000
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.00009, 0.0002, 0.0006, 0.0010, 0.0032)
-    sweep_normal_ending_coefficients = (0.00025, 0.0020, 0.0050, 0.0050, 0.0120)
+    sweep_normal_starting_coefficients = (0.00006, 0.00020, 0.0008, 0.0014, 0.0046)
+    sweep_normal_ending_coefficients = (0.00017, 0.00120, 0.0050, 0.0050, 0.0140)
 
 
 class RegularizeAllLayersExperiment(StandardExperiment):
@@ -32,19 +32,5 @@ class RegularizeAllLayersExperiment(StandardExperiment):
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.00006, 0.00006, 0.00012, 0.0003, 0.0005)
-    sweep_regularized_ending_coefficients = (0.00024, 0.00050, 0.00110, 0.0012, 0.0017)
-
-
-class RegularizeLastLayersExperiment(StandardExperiment):
-    """
-    Only regularize weights using layers 3 and 4.
-    """
-
-    experiment_name: str = "last-layers"
-    regularization_l1_coefficients = (0.0, 0.0, 0.0, 0.03, 0.03)  # Targets l0s ~ 10
-    regularization_trainable_layers = (3, 4)
-
-    # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.00005, 0.00012, 0.00030, 0.00035, 0.00050)
-    sweep_regularized_ending_coefficients = (0.00025, 0.00090, 0.00250, 0.00135, 0.00160)
+    sweep_regularized_starting_coefficients = (0.00003, 0.00005, 0.00016, 0.0003, 0.00055)
+    sweep_regularized_ending_coefficients = (0.00015, 0.00036, 0.00110, 0.0011, 0.00160)
