@@ -1,16 +1,44 @@
+from typing import Protocol
+
 import torch
 
 from config.sae.models import SAEVariant
 
 
-class RegularizeAllLayersExperiment:
+class Experiment(Protocol):
+    experiment_name: str
+    sae_variant: SAEVariant
+    n_features: tuple[int, ...]
+
+    # Sweep parameters
+    num_sweeps: int
+    num_sweep_steps: int
+
+    # Regularization parameters
+    regularization_max_steps: int
+    regularization_coefficient: torch.Tensor
+    regularization_l1_coefficients: tuple[float, ...]
+    regularization_trainable_layers: tuple[int, ...] | None
+
+    # Sweep range for SAE training on model using normal weights
+    sweep_normal_starting_coefficients: tuple[float, ...]
+    sweep_normal_ending_coefficients: tuple[float, ...]
+
+    # Sweep range for SAE training on model using regularized weights
+    sweep_regularized_starting_coefficients: tuple[float, ...]
+    sweep_regularized_ending_coefficients: tuple[float, ...]
+    sweep_regularized_ending_coefficients: tuple[float, ...]
+    sweep_regularized_ending_coefficients: tuple[float, ...]
+
+
+class RegularizeAllLayersExperiment(Experiment):
     """
     Use all layers when regularizing.
     """
 
-    experiment_name: str = "all-layers"
-    sae_variant: SAEVariant = SAEVariant.STANDARD
-    n_features: tuple[int, ...] = tuple(64 * n for n in (8, 8, 32, 64, 64))
+    experiment_name = "all-layers"
+    sae_variant = SAEVariant.STANDARD
+    n_features = tuple(64 * n for n in (8, 8, 32, 64, 64))
 
     # Sweep parameters
     num_sweeps = 1
@@ -28,5 +56,6 @@ class RegularizeAllLayersExperiment:
 
     # Sweep range for SAE training on model using regularized weights
     sweep_regularized_starting_coefficients = (0.000035, 0.00005, 0.00016, 0.0003, 0.00055)
+    sweep_regularized_ending_coefficients = (0.00015, 0.00036, 0.00110, 0.0011, 0.00160)
     sweep_regularized_ending_coefficients = (0.00015, 0.00036, 0.00110, 0.0011, 0.00160)
     sweep_regularized_ending_coefficients = (0.00015, 0.00036, 0.00110, 0.0011, 0.00160)
