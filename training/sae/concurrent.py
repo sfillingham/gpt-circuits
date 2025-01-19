@@ -66,7 +66,7 @@ class ConcurrentTrainer(SAETrainer):
     def backward(self, loss):
         """
         Because SAE layers are independent, we can add layer losses and run a single backward pass instead of having to
-        run a backward pass using each layer's loss.
+        run a separate backward pass using each layer's loss. The results are equivalent.
         """
         loss.sum().backward()
 
