@@ -12,7 +12,7 @@ class StandardExperiment:
 
     # Sweep parameters
     num_sweeps = 1
-    num_sweep_steps = 8
+    num_sweep_steps = 16
 
     # Regularization parameters
     regularization_coefficient: float = 10000.0
@@ -20,7 +20,7 @@ class StandardExperiment:
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.00006, 0.00020, 0.0008, 0.0014, 0.0046)
-    sweep_normal_ending_coefficients = (0.00017, 0.00120, 0.0050, 0.0050, 0.0140)
+    sweep_normal_ending_coefficients = (0.00016, 0.00120, 0.0048, 0.0050, 0.0140)
 
 
 class RegularizeAllLayersExperiment(StandardExperiment):
@@ -32,5 +32,5 @@ class RegularizeAllLayersExperiment(StandardExperiment):
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.00003, 0.00005, 0.00016, 0.0003, 0.00055)
+    sweep_regularized_starting_coefficients = (0.000035, 0.00005, 0.00016, 0.0003, 0.00055)
     sweep_regularized_ending_coefficients = (0.00015, 0.00036, 0.00110, 0.0011, 0.00160)

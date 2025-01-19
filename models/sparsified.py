@@ -143,7 +143,7 @@ class SparsifiedGPT(nn.Module):
         :param layer_idx: Layer index.
         """
 
-        # TODO: Figure out to enable torch.compile for hooks
+        # TODO: Figure out how to enable torch.compile for hooks
         @torch.compiler.disable
         def hook(_, inputs):
 
@@ -152,8 +152,10 @@ class SparsifiedGPT(nn.Module):
             output.__dict__ = sae(x).__dict__
 
             # Patch activations if needed
-            if self.should_patch_activations and layer_idx > 1:
+            if self.should_patch_activations:
                 return (output.reconstructed_activations,)
+            else:
+                return inputs
 
         return hook
 
