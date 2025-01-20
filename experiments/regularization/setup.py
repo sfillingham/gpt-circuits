@@ -52,8 +52,8 @@ class RegularizeAllLayersExperiment(Experiment):
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.00006, 0.00025, 0.0010, 0.0015, 0.0046)
-    sweep_normal_ending_coefficients = (0.00016, 0.00140, 0.0048, 0.0050, 0.0140)
+    sweep_normal_ending_coefficients = (0.00016, 0.00145, 0.0048, 0.0050, 0.0140)
 
     # Sweep range for SAE training on model using regularized weights
     sweep_regularized_starting_coefficients = (0.000035, 0.00005, 0.00017, 0.0003, 0.00055)
-    sweep_regularized_ending_coefficients = (0.00014, 0.00034, 0.00095, 0.0015, 0.00155)
+    sweep_regularized_ending_coefficients = (0.00014, 0.00030, 0.00095, 0.0010, 0.00155)

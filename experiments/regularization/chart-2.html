@@ -14,26 +14,17 @@
         return data;
       }
 
-      function updateChart(originalData, regularizedData) {
+      function updateChart(datasets) {
         const ctx = document.getElementById(`Chart`);
         new Chart(ctx, {
           type: "scatter",
           data: {
-            datasets: [
-              {
-                label: "Original Weights",
-                data: originalData,
-                borderWidth: 1,
-              },
-              {
-                label: "Regularized Weights",
-                data: regularizedData,
-                borderWidth: 1,
-              },
-            ],
+            datasets: datasets,
           },
           options: {
             responsive: true,
+            showLine: false,
+            tension: 0.25,
             scales: {
               x: {
                 title: {
@@ -51,6 +42,9 @@
               },
             },
             plugins: {
+              legend: {
+                display: false,
+              },
               tooltip: {
                 callbacks: {
                   label: function (ctx) {
@@ -70,15 +64,15 @@
       }
 
       fetchData().then((data) => {
-        let layerIdx = 4;
+        let layerIdx = 3;
         let original = data.original[layerIdx];
         let regularized = data.regularized[layerIdx];
 
-        function transformData(data) {
+        function extractDataset(data, index) {
           let newData = data.flatMap((row) => {
             let coefficient = row.coefficient;
-            let xs = row.x;
-            let ys = row.y;
+            let xs = [row.x[index]];
+            let ys = [row.y[index]];
             return xs.map((x, i) => ({
               x: x,
               y: ys[i],
@@ -88,7 +82,26 @@
           return newData;
         }
 
-        updateChart(transformData(original), transformData(regularized));
+        let numSweeps = original[0].x.length;
+        let datasets = [];
+        for (let i = 0; i < numSweeps; i++) {
+          datasets.push({
+            label: `Original Weights`,
+            data: extractDataset(original, i),
+            borderColor: "#36A2EB",
+            backgroundColor: "#9BD0F5",
+            borderWidth: 1,
+          });
+          datasets.push({
+            label: `Regularized Weights`,
+            data: extractDataset(regularized, i),
+            borderColor: "#FF6384",
+            backgroundColor: "#FFB1C1",
+            borderWidth: 1,
+          });
+        }
+
+        updateChart(datasets);
       });
     </script>
   </body>
