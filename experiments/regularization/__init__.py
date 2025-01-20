@@ -128,10 +128,6 @@ def train_model(
         data.append(round(trainer.checkpoint_e2e_ce_loss_increase.item(), 6))
         data.append(round(trainer.checkpoint_e2e_kl_div.item(), 6))
         f.write(",".join(map(str, data)) + "\n")
-        f.write(",".join(map(str, data)) + "\n")
-        data.append(round(trainer.checkpoint_e2e_kl_div.item(), 6))
-        f.write(",".join(map(str, data)) + "\n")
-        f.write(",".join(map(str, data)) + "\n")
 
 
 def export_sweep_results(setup: Experiment, base_dir: Path):
