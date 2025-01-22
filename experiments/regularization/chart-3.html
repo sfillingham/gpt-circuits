@@ -51,27 +51,23 @@
                 type: "logarithmic",
               },
             },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function (ctx) {
-                    return (
-                      (ctx.raw.coefficient
-                        ? `L1 Coefficient: ${ctx.raw.coefficient.toFixed(5)} | `
-                        : "") +
-                      `L0: ${ctx.raw.x.toFixed(1)} ` +
-                      `| CE Loss Increase: ${ctx.raw.y.toFixed(4)}`
-                    );
-                  },
-                },
-              },
-            },
           },
         });
       }
 
       fetchData().then((data) => {
-        updateChart(data.original, data.regularized);
+        function transformData(data) {
+          return data.map((row) => {
+            return {
+              x: row.sum_l0s,
+              y: row.ce_loss_increase,
+            };
+          });
+        }
+        let original = transformData(data.original);
+        let regularized = transformData(data.regularized);
+
+        updateChart(original, regularized);
       });
     </script>
   </body>

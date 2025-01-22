@@ -194,6 +194,21 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
     """
     Export end-to-end results to JSON files.
     """
+    # Read CE losses
+    normal_ce_losses = pd.read_csv(base_dir / "model.normal.csv", header=None, names=("ce_loss",))
+    regularized_ce_losses = pd.read_csv(
+        base_dir / f"{setup.experiment_name}.model.regularized.csv", header=None, names=("ce_loss",)
+    )
+
+    # Repeat each row setup.num_sweep_steps times
+    normal_ce_losses = normal_ce_losses.loc[normal_ce_losses.index.repeat(setup.num_sweep_steps)].reset_index(
+        drop=True
+    )
+    regularized_ce_losses = regularized_ce_losses.loc[
+        regularized_ce_losses.index.repeat(setup.num_sweep_steps)
+    ].reset_index(drop=True)
+
+    # Read end-to-end metrics
     column_names = ["sum_coeffs", "sum_l0s", "ce_loss_increase", "kl_div"]
     normal_csv = pd.read_csv(
         base_dir / "e2e.normal.csv",
@@ -206,26 +221,34 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
         names=column_names,
     )
 
+    # Append CE loss column to end-to-end metrics
+    normal_csv["ce_loss"] = normal_ce_losses
+    regularized_csv["ce_loss"] = regularized_ce_losses
+
     # Group by 'sum_coeffs' and calculate the mean for 'sum_l0s' and 'ce_loss_increase'
-    grouped_normal = normal_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase"]].mean().reset_index()
-    grouped_regularized = regularized_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase"]].mean().reset_index()
+    grouped_normal = normal_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase", "ce_loss"]].mean().reset_index()
+    grouped_regularized = (
+        regularized_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase", "ce_loss"]].mean().reset_index()
+    )
 
     # data
     data = {"original": [], "regularized": []}
     for _, row in grouped_normal.iterrows():
         data["original"].append(
             {
-                "sum_coeffs": row["sum_coeffs"],
-                "x": row["sum_l0s"],
-                "y": row["ce_loss_increase"],
+                "sum_coeffs": round(row["sum_coeffs"], 6),
+                "sum_l0s": round(row["sum_l0s"], 6),
+                "ce_loss_increase": round(row["ce_loss_increase"], 6),
+                "ce_loss": round(row["ce_loss"], 6),
             }
         )
     for _, row in grouped_regularized.iterrows():
         data["regularized"].append(
             {
-                "sum_coeffs": row["sum_coeffs"],
-                "x": row["sum_l0s"],
-                "y": row["ce_loss_increase"],
+                "sum_coeffs": round(row["sum_coeffs"], 6),
+                "sum_l0s": round(row["sum_l0s"], 6),
+                "ce_loss_increase": round(row["ce_loss_increase"], 6),
+                "ce_loss": round(row["ce_loss"], 6),
             }
         )
 
