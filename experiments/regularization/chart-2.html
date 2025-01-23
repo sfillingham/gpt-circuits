@@ -2,6 +2,9 @@
 <html>
   <head>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="
+https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js
+"></script>
   </head>
   <body>
     <div>
@@ -9,16 +12,17 @@
     </div>
     <script>
       async function fetchData() {
-        const response = await fetch(`results.sweep.json`);
+        const response = await fetch(`results.models.json`);
         const data = await response.json();
         return data;
       }
 
-      function updateChart(datasets) {
+      function updateChart(datasets, originalAverage, regularizedAverage) {
         const ctx = document.getElementById(`Chart`);
         new Chart(ctx, {
           type: "scatter",
           data: {
+            labels: ["", "Original Weights", "Regularized Weights", ""],
             datasets: datasets,
           },
           options: {
@@ -27,18 +31,17 @@
             tension: 0.25,
             scales: {
               x: {
+                type: "category",
                 title: {
-                  display: true,
-                  text: "L0",
+                  display: false,
+                  text: "Training Technique",
                 },
-                type: "logarithmic",
               },
               y: {
                 title: {
                   display: true,
-                  text: "Cross-Entropy Loss Increase",
+                  text: "Cross-Entropy Loss",
                 },
-                type: "logarithmic",
               },
             },
             plugins: {
@@ -58,50 +61,63 @@
                   },
                 },
               },
+              annotation: {
+                annotations: {
+                  originalAverage: {
+                    type: "line",
+                    yMin: originalAverage,
+                    yMax: originalAverage,
+                    borderColor: "rgba(54, 162, 235, 0.75)",
+                    borderWidth: 1,
+                  },
+                  regularizedAverage: {
+                    type: "line",
+                    yMin: regularizedAverage,
+                    yMax: regularizedAverage,
+                    borderColor: "rgba(255, 99, 132, 0.75)",
+                    borderWidth: 1,
+                  },
+                },
+              },
             },
           },
         });
       }
 
       fetchData().then((data) => {
-        let layerIdx = 3;
-        let original = data.original[layerIdx];
-        let regularized = data.regularized[layerIdx];
-
-        function extractDataset(data, index) {
-          let newData = data.flatMap((row) => {
-            let coefficient = row.coefficient;
-            let xs = [row.x[index]];
-            let ys = [row.y[index]];
-            return xs.map((x, i) => ({
+        function transformData(data, x) {
+          return data.map((row) => {
+            return {
               x: x,
-              y: ys[i],
-              coefficient: coefficient,
-            }));
+              y: row.ce_loss,
+            };
           });
-          return newData;
         }
 
-        let numSweeps = original[0].x.length;
-        let datasets = [];
-        for (let i = 0; i < numSweeps; i++) {
-          datasets.push({
-            label: `Original Weights`,
-            data: extractDataset(original, i),
+        let averageOriginal =
+          data.original.reduce((acc, val) => acc + val.ce_loss, 0) / data.original.length;
+        let averageRegularized =
+          data.regularized.reduce((acc, val) => acc + val.ce_loss, 0) / data.original.length;
+
+        // Add averages
+        let datasets = [
+          {
+            label: "Original Weights",
+            data: transformData(data.original, "Original Weights"),
             borderColor: "#36A2EB",
-            backgroundColor: "#9BD0F5",
+            backgroundColor: "#36A2EB",
             borderWidth: 1,
-          });
-          datasets.push({
-            label: `Regularized Weights`,
-            data: extractDataset(regularized, i),
+          },
+          {
+            label: "Regularized Weights",
+            data: transformData(data.regularized, "Regularized Weights"),
             borderColor: "#FF6384",
-            backgroundColor: "#FFB1C1",
+            backgroundColor: "#FF6384",
             borderWidth: 1,
-          });
-        }
+          },
+        ];
 
-        updateChart(datasets);
+        updateChart(datasets, averageOriginal, averageRegularized);
       });
     </script>
   </body>

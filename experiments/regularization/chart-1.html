@@ -23,23 +23,12 @@
         return data;
       }
 
-      function updateChart(data, layerIdx) {
+      function updateChart(datasets, layerIdx) {
         const ctx = document.getElementById(`Chart${layerIdx}`);
         new Chart(ctx, {
           type: "scatter",
           data: {
-            datasets: [
-              {
-                label: "Original Weights",
-                data: data.original[layerIdx],
-                borderWidth: 1,
-              },
-              {
-                label: "Regularized Weights",
-                data: data.regularized[layerIdx],
-                borderWidth: 1,
-              },
-            ],
+            datasets: datasets,
           },
           options: {
             responsive: true,
@@ -62,6 +51,13 @@
               },
             },
             plugins: {
+              legend: {
+                labels: {
+                  filter: function (item, chart) {
+                    return item.text != "";
+                  },
+                },
+              },
               tooltip: {
                 callbacks: {
                   label: function (ctx) {
@@ -84,28 +80,73 @@
         let original = data.original;
         let regularized = data.regularized;
 
-        function transformData(data) {
-          return data.map((row) =>
-            row.map((item) => ({
-              coefficient: item.coefficient,
-              x: Array.isArray(item.x)
-                ? item.x.reduce((acc, val) => acc + val, 0) / item.x.length
-                : item.x,
-              y: Array.isArray(item.y)
-                ? item.y.reduce((acc, val) => acc + val, 0) / item.y.length
-                : item.y,
-            }))
-          );
+        function averageSweeps(data) {
+          return data.map((item) => ({
+            coefficient: item.coefficient,
+            x: item.x.reduce((acc, val) => acc + val, 0) / item.x.length,
+            y: item.y.reduce((acc, val) => acc + val, 0) / item.y.length,
+          }));
         }
 
-        data.original = transformData(original);
-        data.regularized = transformData(regularized);
+        function extractSweep(data, index) {
+          let newData = data.flatMap((row) => {
+            let coefficient = row.coefficient;
+            let xs = [row.x[index]];
+            let ys = [row.y[index]];
+            return xs.map((x, i) => ({
+              x: x,
+              y: ys[i],
+              coefficient: coefficient,
+            }));
+          });
+          return newData;
+        }
 
-        updateChart(data, 0);
-        updateChart(data, 1);
-        updateChart(data, 2);
-        updateChart(data, 3);
-        updateChart(data, 4);
+        for (let layerIdx = 0; layerIdx < 5; layerIdx++) {
+          let original = data.original[layerIdx];
+          let regularized = data.regularized[layerIdx];
+
+          // Add averages
+          let datasets = [
+            {
+              label: "Original Weights",
+              data: averageSweeps(original),
+              borderColor: "#36A2EB",
+              backgroundColor: "#36A2EB",
+              borderWidth: 1,
+            },
+            {
+              label: "Regularized Weights",
+              data: averageSweeps(regularized),
+              borderColor: "#FF6384",
+              backgroundColor: "#FF6384",
+              borderWidth: 1,
+            },
+          ];
+
+          // Add individual sweeps
+          let numSweeps = original[0].x.length;
+          for (let i = 0; i < numSweeps; i++) {
+            datasets.push({
+              label: "",
+              data: extractSweep(original, i),
+              borderColor: "rgba(54, 162, 235, 0.5)",
+              backgroundColor: "rgba(155, 208, 245, 0.5)",
+              borderWidth: 1,
+              showLine: false,
+            });
+            datasets.push({
+              label: "",
+              data: extractSweep(regularized, i),
+              borderColor: "rgba(255, 99, 132, 0.5)",
+              backgroundColor: "rgba(255, 177, 193, 0.5)",
+              borderWidth: 1,
+              showLine: false,
+            });
+          }
+
+          updateChart(datasets, layerIdx);
+        }
       });
     </script>
   </body>

@@ -200,6 +200,17 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
         base_dir / f"{setup.experiment_name}.model.regularized.csv", header=None, names=("ce_loss",)
     )
 
+    # CE loss data
+    ce_loss_data = {"original": [], "regularized": []}
+    for ce_loss in normal_ce_losses.itertuples():
+        ce_loss_data["original"].append({"ce_loss": ce_loss.ce_loss})
+    for ce_loss in regularized_ce_losses.itertuples():
+        ce_loss_data["regularized"].append({"ce_loss": ce_loss.ce_loss})
+
+    # Export to JSON
+    with open(base_dir / f"{setup.experiment_name}.results.models.json", "w") as f:
+        json.dump(ce_loss_data, f, indent=4)
+
     # Repeat each row setup.num_sweep_steps times
     normal_ce_losses = normal_ce_losses.loc[normal_ce_losses.index.repeat(setup.num_sweep_steps)].reset_index(
         drop=True
@@ -231,10 +242,10 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
         regularized_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase", "ce_loss"]].mean().reset_index()
     )
 
-    # data
-    data = {"original": [], "regularized": []}
+    # Sweep data
+    sweep_data = {"original": [], "regularized": []}
     for _, row in grouped_normal.iterrows():
-        data["original"].append(
+        sweep_data["original"].append(
             {
                 "sum_coeffs": round(row["sum_coeffs"], 6),
                 "sum_l0s": round(row["sum_l0s"], 6),
@@ -243,7 +254,7 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
             }
         )
     for _, row in grouped_regularized.iterrows():
-        data["regularized"].append(
+        sweep_data["regularized"].append(
             {
                 "sum_coeffs": round(row["sum_coeffs"], 6),
                 "sum_l0s": round(row["sum_l0s"], 6),
@@ -254,4 +265,4 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
 
     # Export to JSON
     with open(base_dir / f"{setup.experiment_name}.results.e2e.json", "w") as f:
-        json.dump(data, f, indent=4)
+        json.dump(sweep_data, f, indent=4)

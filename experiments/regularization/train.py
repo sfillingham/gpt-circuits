@@ -14,7 +14,10 @@ from experiments.regularization import (
     export_sweep_results,
     sweep_training_parameters,
 )
-from experiments.regularization.setup import RegularizeAllLayersExperiment  # noqa: F401
+from experiments.regularization.setup import (  # noqa: F401
+    RegularizeAllLayersExperiment,
+    VariedCoefficientsExperiment,
+)
 from training.gpt import GPTTrainer
 from training.sae.regularization import RegularizationTrainer
 
