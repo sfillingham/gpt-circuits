@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+  <head></head>
+  <body>
+    <div>
+      <figure id="ArchitectureDiagram">
+        <ol>
+          <li>
+            <div class="input">Inputs</div>
+          </li>
+          <li>
+            <div class="block embedding">Embedding</div>
+            <div class="sae">Sparse Autoencoder</div>
+          </li>
+          <li>
+            <div class="block transformer">Transformer Block</div>
+            <div class="sae">Sparse Autoencoder</div>
+          </li>
+          <li>
+            <div class="block transformer">Transformer Block</div>
+            <div class="sae">Sparse Autoencoder</div>
+          </li>
+          <li>
+            <div class="block transformer">Transformer Block</div>
+            <div class="sae">Sparse Autoencoder</div>
+          </li>
+          <li>
+            <div class="block transformer">Transformer Block</div>
+            <div class="sae">Sparse Autoencoder</div>
+          </li>
+          <li>
+            <div class="block transposed-embedding">Embedding<sup>T</sup></div>
+          </li>
+          <li>
+            <div class="block softmax">Softmax</div>
+          </li>
+          <li>
+            <div class="output">Output Probabilities</div>
+          </li>
+        </ol>
+        <Tooltip id="DiagramTooltip" />
+      </figure>
+    </div>
+    <style>
+      :root {
+        --block-distance: 20px;
+        --block-width: 45%;
+        --line-width: 72.5%;
+      }
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      #ArchitectureDiagram {
+        max-width: 400px;
+        margin: 0 auto;
+
+        ol {
+          margin: 0;
+          padding: 0;
+          font-size: 0.9em;
+          list-style: none;
+        }
+
+        li {
+          position: relative;
+          margin-bottom: var(--block-distance);
+        }
+
+        .input,
+        .output,
+        .block {
+          box-sizing: border-box;
+          width: var(--block-width);
+          padding: 5px 0;
+          text-align: center;
+        }
+
+        .input:after,
+        .block:after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: calc(var(--block-width) / 2);
+          box-sizing: border-box;
+          height: var(--block-distance);
+          border-left: 1px solid #000;
+        }
+
+        .block {
+          box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+          border: 1px solid #000;
+          border-radius: 5px;
+        }
+
+        .sae {
+          box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+          position: absolute;
+          top: 50%;
+          right: 0;
+          box-sizing: border-box;
+          width: var(--block-width);
+          margin-top: calc(var(--block-distance) / 2);
+          padding: 5px 0;
+          border: 1px solid #000;
+          border-radius: 5px;
+          text-align: center;
+          white-space: nowrap;
+        }
+        .sae:before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          right: 100%;
+          box-sizing: border-box;
+          width: var(--line-width);
+          border-top: 1px dashed #000;
+        }
+
+        .input,
+        .output {
+          font-style: italic;
+        }
+        .embedding {
+          background: rgba(240 50 50 / 25%);
+        }
+        .transformer {
+          background: rgba(180 180 180 / 50%);
+        }
+        .transposed-embedding {
+          background: rgba(240 50 50 / 25%);
+        }
+        .softmax {
+          background: white;
+        }
+        .sae {
+          background: rgba(255 220 90 / 75%);
+        }
+      }
+    </style>
+  </body>
+</html>

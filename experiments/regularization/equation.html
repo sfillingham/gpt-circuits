@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+  <head></head>
+  <body>
+    <div id="LossFunction">
+      <figure>
+        <math class="loss-definition" display="block">
+          <mi>Loss</mi>
+          <mspace is="true" width="0.22em"></mspace>
+          <mo form="infix">=</mo>
+          <munder>
+            <munder accentunder="true">
+              <mrow>
+                <mo form="prefix">-</mo>
+                <munderover>
+                  <mo largeop="true" movablelimit="true"> ∑ </mo>
+                  <mrow>
+                    <mi>i</mi>
+                    <mo form="infix">=</mo>
+                    <mn>1</mn>
+                  </mrow>
+                  <mi>V</mi>
+                </munderover>
+                <msub>
+                  <mi>y</mi>
+                  <mi>i</mi>
+                </msub>
+                <mi>log</mi>
+                <mo fence="true" stretchy="false"> ( </mo>
+                <msub>
+                  <mi>p</mi>
+                  <mi>i</mi>
+                </msub>
+                <mo fence="true" stretchy="false"> ) </mo>
+              </mrow>
+              <mspace height="0.5em"></mspace>
+            </munder>
+            <mi mathvariant="normal">Cross-entropy loss</mi>
+          </munder>
+          <mspace is="true" width="0.22em"></mspace>
+          <mo form="infix">+</mo>
+          <mspace is="true" width="0.22em"></mspace>
+          <munder>
+            <munder accentunder="true">
+              <mrow>
+                <mfrac>
+                  <mn>1</mn>
+                  <mi>N</mi>
+                </mfrac>
+                <munderover>
+                  <mo largeop="true" movablelimit="true"> ∑ </mo>
+                  <mrow>
+                    <mi>i</mi>
+                    <mo form="infix">=</mo>
+                    <mn>1</mn>
+                  </mrow>
+                  <mi>N</mi>
+                </munderover>
+                <mfrac>
+                  <mrow>
+                    <msub>
+                      <mi mathvariant="script">&#x03BB;</mi>
+                      <msub>
+                        <mi>reconstruct</mi>
+                        <mi>i</mi>
+                      </msub>
+                    </msub>
+                    <msub>
+                      <mi mathvariant="script">L</mi>
+                      <mrow>
+                        <msub>
+                          <mi>reconstruct</mi>
+                          <mi>i</mi>
+                        </msub>
+                      </mrow>
+                    </msub>
+                  </mrow>
+                  <mrow>
+                    <mo>&#x2225;</mo>
+                    <msub>
+                      <mi>X</mi>
+                      <mi>i</mi>
+                    </msub>
+                    <mo>&#x2225;</mo>
+                  </mrow>
+                </mfrac>
+                <mo form="infix">+</mo>
+                <mfrac>
+                  <mn>1</mn>
+                  <mi>N</mi>
+                </mfrac>
+                <munderover>
+                  <mo largeop="true" movablelimit="true"> ∑ </mo>
+                  <mrow>
+                    <mi>i</mi>
+                    <mo form="infix">=</mo>
+                    <mn>1</mn>
+                  </mrow>
+                  <mi>N</mi>
+                </munderover>
+                <msub>
+                  <mi mathvariant="script">&#x03BB;</mi>
+                  <msub>
+                    <mi>sparcity</mi>
+                    <mi>i</mi>
+                  </msub>
+                </msub>
+                <msub>
+                  <mi mathvariant="script">L</mi>
+                  <mrow>
+                    <msub>
+                      <mi>sparcity</mi>
+                      <mi>i</mi>
+                    </msub>
+                  </mrow>
+                </msub>
+              </mrow>
+              <mspace height="0.5em"></mspace>
+            </munder>
+            <mi mathvariant="normal">SAE regularization terms</mi>
+          </munder>
+        </math>
+      </figure>
+      <ul className="list">
+        <li>
+          <math>
+            <mpadded>
+              <mi>V</mi>
+            </mpadded>
+          </math>
+          <span>: Vocabulary size</span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <mi>N</mi>
+            </mpadded>
+          </math>
+          <span>
+            : Number of autoencoders, which is one more than the number of transformer blocks
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi>y</mi>
+                <mi>i</mi>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : True label for the token, which is set 1 for the correct token and 0 otherwise
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi>p</mi>
+                <mi>i</mi>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : The predicted probability for the
+            <math><mi>i</mi> </math>-th token
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <mrow>
+                <mo>&#x2225;</mo>
+                <msub>
+                  <mi>X</mi>
+                  <mi>i</mi>
+                </msub>
+                <mo>&#x2225;</mo>
+              </mrow>
+            </mpadded>
+          </math>
+          <span
+            >: L2 norm of residual stream activations for the <math><mi>i</mi> </math>-th
+            layer</span
+          >
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi mathvariant="script">L</mi>
+                <mrow>
+                  <msub>
+                    <mi>reconstruct</mi>
+                    <mi>i</mi>
+                  </msub>
+                </mrow>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : Reconstruction loss for the
+            <math><mi>i</mi> </math>-th encoder
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi mathvariant="script">&#x03BB;</mi>
+                <mrow>
+                  <msub>
+                    <mi>reconstruct</mi>
+                    <mi>i</mi>
+                  </msub>
+                </mrow>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : Reconstruction regularization term for the
+            <math><mi>i</mi> </math>-th encoder
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi mathvariant="script">L</mi>
+                <mrow>
+                  <msub>
+                    <mi>sparcity</mi>
+                    <mi>i</mi>
+                  </msub>
+                </mrow>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : Feature sparsity loss for the
+            <math><mi>i</mi> </math>-th encoder
+          </span>
+        </li>
+        <li>
+          <math>
+            <mpadded>
+              <msub>
+                <mi mathvariant="script">&#x03BB;</mi>
+                <mrow>
+                  <msub>
+                    <mi>sparcity</mi>
+                    <mi>i</mi>
+                  </msub>
+                </mrow>
+              </msub>
+            </mpadded>
+          </math>
+          <span>
+            : Sparsity regularization term for the
+            <math><mi>i</mi> </math>-th encoder
+          </span>
+        </li>
+      </ul>
+    </div>
+  </body>
+</html>

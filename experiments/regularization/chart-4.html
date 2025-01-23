@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div>
+      <canvas id="Chart"></canvas>
+    </div>
+    <script>
+      async function fetchData() {
+        const response = await fetch(`results.sweep.json`);
+        const data = await response.json();
+        return data;
+      }
+
+      function updateChart(datasets) {
+        const ctx = document.getElementById(`Chart`);
+        new Chart(ctx, {
+          type: "scatter",
+          data: {
+            datasets: datasets,
+          },
+          options: {
+            responsive: true,
+            showLine: true,
+            tension: 0.25,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "L0",
+                },
+                type: "logarithmic",
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Cross-Entropy Loss Increase",
+                },
+                type: "logarithmic",
+              },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  filter: function (item, chart) {
+                    return item.text != "";
+                  },
+                  usePointStyle: true,
+                },
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return (
+                      (ctx.raw.coefficient
+                        ? `L1 Coefficient: ${ctx.raw.coefficient.toFixed(5)} | `
+                        : "") +
+                      `L0: ${ctx.raw.x.toFixed(1)} ` +
+                      `| CE Loss Increase: ${ctx.raw.y.toFixed(4)}`
+                    );
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      fetchData().then((data) => {
+        let original = data.original;
+        let regularized = data.regularized;
+
+        function averageSweeps(data) {
+          return data.map((item) => ({
+            coefficient: item.coefficient,
+            x: item.x.reduce((acc, val) => acc + val, 0) / item.x.length,
+            y: item.y.reduce((acc, val) => acc + val, 0) / item.y.length,
+          }));
+        }
+
+        function extractSweep(data, index) {
+          let newData = data.flatMap((row) => {
+            let coefficient = row.coefficient;
+            let xs = [row.x[index]];
+            let ys = [row.y[index]];
+            return xs.map((x, i) => ({
+              x: x,
+              y: ys[i],
+              coefficient: coefficient,
+            }));
+          });
+          return newData;
+        }
+
+        let datasets = [];
+        let layers = [1, 2];
+        for (let layerIdx of layers) {
+          let original = data.original[layerIdx];
+          let regularized = data.regularized[layerIdx];
+          let pointStyle = layerIdx === layers[0] ? "rect" : "triangle";
+
+          // Add averages
+          datasets.push({
+            label: `Layer ${layerIdx}`,
+            data: averageSweeps(original),
+            borderColor: "#36A2EB",
+            backgroundColor: "#36A2EB",
+            borderWidth: 1,
+            pointStyle: pointStyle,
+          });
+          datasets.push({
+            label: `Layer ${layerIdx} (Improved)`,
+            data: averageSweeps(regularized),
+            borderColor: "#FF6384",
+            backgroundColor: "#FF6384",
+            borderWidth: 1,
+            pointStyle: pointStyle,
+          });
+        }
+        updateChart(datasets);
+      });
+    </script>
+  </body>
+</html>
