@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.4.4/build/index.umd.min.js"></script>
+  </head>
+  <body>
+    <div>
+      <canvas id="Chart"></canvas>
+    </div>
+    <script>
+      async function fetchData() {
+        const response = await fetch(`results.sweep.json`);
+        const data = await response.json();
+        return data;
+      }
+
+      function updateChart(datasets) {
+        const ctx = document.getElementById(`Chart`);
+        new Chart(ctx, {
+          type: "boxplot",
+          data: {
+            labels: ["Embedding", "Layer 1", "Layer 2", "Layer 3", "Layer 4"],
+            datasets: datasets,
+          },
+          options: {
+            responsive: true,
+            tension: 0.25,
+            scales: {
+              x: {
+                type: "category",
+                title: {
+                  display: false,
+                  text: "Layer",
+                },
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Cross-Entropy Loss Increase",
+                },
+                min: 0,
+              },
+            },
+            meanRadius: 3,
+            backgroundColor: "transparent",
+            borderColor: "transparent",
+            elements: {
+              boxandwhiskers: {
+                itemRadius: 2,
+              },
+            },
+            coef: 10, // Include outliers
+            plugins: {
+              legend: {
+                labels: {
+                  generateLabels: (chart) => {
+                    const datasets = chart.data.datasets;
+                    return datasets.map((dataset, i) => {
+                      return {
+                        text: dataset.label,
+                        fillStyle: i == 0 ? "rgba(54, 162, 235, 1.0)" : "rgba(255, 99, 132, 1.0)",
+                        strokeStyle: i == 0 ? "rgba(54, 162, 235, 1.0)" : "rgba(255, 99, 132, 1.0)",
+                      };
+                    });
+                  },
+                },
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return (
+                      (ctx.raw.coefficient
+                        ? `L1 Coefficient: ${ctx.raw.coefficient.toFixed(5)} | `
+                        : "") +
+                      `L0: ${ctx.raw.x.toFixed(1)} ` +
+                      `| CE Loss Increase: ${ctx.raw.y.toFixed(4)}`
+                    );
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      fetchData().then((data) => {
+        let original = data.original;
+        let regularized = data.regularized;
+
+        let originalDataset = {
+          label: "Original Weights",
+          data: [],
+          meanBorderColor: "rgba(54, 162, 235, 1.0)",
+          meanBackgroundColor: "rgba(54, 162, 235, 1.0)",
+          itemBackgroundColor: "rgba(155, 208, 245, 0.5)",
+        };
+        let regularizedDataset = {
+          label: "Regularized Weights",
+          data: [],
+          meanBorderColor: "rgba(255, 99, 132, 1.0)",
+          meanBackgroundColor: "rgba(255, 99, 132, 1.0)",
+          itemBackgroundColor: "rgba(255, 177, 193, 0.5)",
+        };
+
+        let layers = [0, 1, 2, 3, 4];
+        let numSweeps = data.original[0].length;
+        for (let layerIdx of layers) {
+          // Add data
+          originalDataset.data.push(data.original[layerIdx][0].y);
+          regularizedDataset.data.push(data.regularized[layerIdx][0].y);
+        }
+        updateChart([originalDataset, regularizedDataset]);
+      });
+    </script>
+  </body>
+</html>
