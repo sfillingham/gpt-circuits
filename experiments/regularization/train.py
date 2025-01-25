@@ -1,7 +1,7 @@
 """
 Train a GPT model with experimental SAE regularization.
 
-$ python -m experiments.regularization.train --step=0
+$ python -m experiments.regularization.train --setup=all-layers --step=0
 """
 
 import argparse
@@ -15,14 +15,11 @@ from experiments.regularization import (
     sweep_training_parameters,
 )
 from experiments.regularization.setup import (  # noqa: F401
+    GatedSAEExperiment,
     RegularizeAllLayersExperiment,
-    VariedCoefficientsExperiment,
 )
 from training.gpt import GPTTrainer
 from training.sae.regularization import RegularizationTrainer
-
-# Experiment setups are in setup.py
-setup = RegularizeAllLayersExperiment()
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,12 +28,21 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--step", type=int, default=0, help="Which step to run")
+    parser.add_argument("--setup", type=str, default="all-layers", help="Which setup to use")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
+
+    # Experiment setups are in setup.py
+    match args.setup:
+        case "all-layers":
+            setup = RegularizeAllLayersExperiment()
+        case "gated":
+            setup = GatedSAEExperiment()
+
     base_dir = TrainingConfig.checkpoints_dir / "regularization"
 
     match args.step:
@@ -47,8 +53,10 @@ if __name__ == "__main__":
             # Load configuration
             config = gpt_training_options["shakespeare_64x4"]
             config.name = "regularization/model.normal"
-            # Train for same duration
+            # Train using same params as regularized model
             config.max_steps = setup.regularization_max_steps
+            config.learning_rate = setup.regularization_learning_rate
+            config.min_lr = setup.regularization_min_lr
 
             # Initialize trainer
             trainer = GPTTrainer(config)
@@ -69,7 +77,10 @@ if __name__ == "__main__":
                 l1_coefficients=setup.regularization_l1_coefficients,
                 trainable_layers=setup.regularization_trainable_layers,
             )
+            # Set learning rate parameters
             config.max_steps = setup.regularization_max_steps
+            config.learning_rate = setup.regularization_learning_rate
+            config.min_lr = setup.regularization_min_lr
             config.loss_coefficients.regularization = setup.regularization_coefficient
 
             # Initialize trainer
