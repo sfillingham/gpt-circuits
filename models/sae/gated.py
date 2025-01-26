@@ -36,13 +36,19 @@ class GatedSAE(nn.Module, SparseAutoencoder):
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         x: GPT model activations (batch_size, n_embd)
+
+        Implementation adapted from: https://github.com/saprmarks/dictionary_learning/
         """
         x_centered = x - self.b_dec
-        pi_gate = x_centered @ self.W_gate + self.b_gate
+        x_enc = x_centered @ self.W_gate
 
+        # Gating network
+        pi_gate = x_enc + self.b_gate
         f_gate = (pi_gate > 0).float()  # whether to gate the feature
-        W_mag = self.W_gate * torch.exp(self.r_mag)
-        f_mag = F.relu(x_centered @ W_mag + self.b_mag)  # feature magnitudes
+
+        # Magnitude network
+        pi_mag = x_enc * torch.exp(self.r_mag) + self.b_mag
+        f_mag = F.relu(pi_mag)  # feature magnitudes
 
         feature_magnitudes = f_gate * f_mag
         return feature_magnitudes, pi_gate

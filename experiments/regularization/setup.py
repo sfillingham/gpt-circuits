@@ -81,13 +81,13 @@ class GatedSAEExperiment(Experiment):
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
     regularization_coefficient = torch.tensor([10000.0, 10000.0, 10000.0, 10000.0, 10000.0])
-    regularization_l1_coefficients = (10.0, 40.0, 225.0, 250.0, 250.0)  # Targets l0s ~ 10
+    regularization_l1_coefficients = (10.0, 40.0, 225.0, 225.0, 225.0)  # Targets l0s ~ 10
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.2, 1.0, 4.0, 8.0, 16.0)
-    sweep_normal_ending_coefficients = (0.6, 4.0, 20.0, 30.0, 60.0)
+    sweep_normal_starting_coefficients = (0.1, 1.0, 4.0, 8.0, 16.0)
+    sweep_normal_ending_coefficients = (0.5, 4.0, 20.0, 30.0, 60.0)
 
     # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.1, 0.3, 1.0, 1.0, 2.0)
-    sweep_regularized_ending_coefficients = (0.5, 1.5, 4.0, 5.0, 12.0)
+    sweep_regularized_starting_coefficients = (0.05, 0.3, 1.0, 1.0, 2.0)
+    sweep_regularized_ending_coefficients = (0.25, 1.3, 5.0, 6.0, 12.0)
