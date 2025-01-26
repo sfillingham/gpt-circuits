@@ -123,7 +123,8 @@ class SparsifiedGPT(nn.Module):
             sae = self.saes[f"{layer_idx}"]
             # Output values will be overwritten (hack to pass object by reference)
             output = EncoderOutput(torch.tensor(0), torch.tensor(0))
-            hooks.append(target.register_forward_pre_hook(self.create_hook(sae, output, layer_idx)))
+            hook = self.create_hook(sae, output, layer_idx)
+            hooks.append(target.register_forward_pre_hook(hook))  # type: ignore
             encoder_outputs[layer_idx] = output
 
         try:
@@ -143,9 +144,11 @@ class SparsifiedGPT(nn.Module):
         :param layer_idx: Layer index.
         """
 
-        # TODO: Figure out how to enable torch.compile for hooks
-        @torch.compiler.disable
+        @torch.compiler.disable(recursive=False)  # type: ignore
         def hook(_, inputs):
+            """
+            NOTE: Compiling seems to struggle with branching logic, and so we disable it (non-recursively).
+            """
 
             x = inputs[0]
             # Override field values instead of replacing reference
