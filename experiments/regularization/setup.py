@@ -55,12 +55,12 @@ class RegularizeAllLayersExperiment(Experiment):
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.0021, 0.015, 0.051, 0.10, 0.26)
-    sweep_normal_ending_coefficients = (0.008, 0.082, 0.30, 0.39, 0.85)
+    sweep_normal_starting_coefficients = (0.0021, 0.015, 0.052, 0.09, 0.26)
+    sweep_normal_ending_coefficients = (0.009, 0.09, 0.33, 0.39, 0.86)
 
     # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.0005, 0.002, 0.007, 0.011, 0.02)
-    sweep_regularized_ending_coefficients = (0.0055, 0.013, 0.044, 0.05, 0.06)
+    sweep_regularized_starting_coefficients = (0.0005, 0.002, 0.006, 0.011, 0.02)
+    sweep_regularized_ending_coefficients = (0.0055, 0.014, 0.044, 0.048, 0.06)
 
 
 class GatedSAEExperiment(Experiment):
@@ -81,13 +81,13 @@ class GatedSAEExperiment(Experiment):
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
     regularization_coefficient = torch.tensor([3.0, 3.0, 3.0, 3.0, 3.0])
-    regularization_l1_coefficients = (0.1, 0.1, 0.1, 0.1, 0.1)  # Targets l0s ~ 10
+    regularization_l1_coefficients = (0.1, 0.06, 0.1, 0.12, 0.2)  # Targets l0s ~ 10
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights
-    sweep_normal_starting_coefficients = (0.1, 0.1, 0.1, 0.1, 0.1)
-    sweep_normal_ending_coefficients = (0.5, 0.5, 0.5, 0.5, 0.5)
+    sweep_normal_starting_coefficients = (0.01, 0.02, 0.05, 0.1, 0.2)
+    sweep_normal_ending_coefficients = (0.08, 0.08, 0.2, 0.4, 0.8)
 
     # Sweep range for SAE training on model using regularized weights
-    sweep_regularized_starting_coefficients = (0.1, 0.1, 0.1, 0.1, 0.1)
-    sweep_regularized_ending_coefficients = (0.5, 0.5, 0.5, 0.5, 0.5)
+    sweep_regularized_starting_coefficients = (0.005, 0.005, 0.005, 0.01, 0.02)
+    sweep_regularized_ending_coefficients = (0.02, 0.02, 0.03, 0.05, 0.08)
