@@ -29,12 +29,12 @@ class SAELossComponents:
         sparsity: torch.Tensor,
         aux: Optional[torch.Tensor] = None,
     ):
-        self.reconstruct = F.mse_loss(x, x_reconstructed)
+        self.reconstruct = (x - x_reconstructed).pow(2).sum(dim=-1).mean()
         self.sparsity = sparsity
         self.aux = aux if aux is not None else torch.tensor(0.0, device=x.device)
-        self.l0 = (feature_magnitudes != 0).sum(dim=-1).float().mean()
-        self.x_norm = torch.norm(x)
-        self.x_l1 = F.l1_loss(x, torch.zeros_like(x))
+        self.l0 = (feature_magnitudes != 0).float().sum(dim=-1).mean()
+        self.x_norm = torch.norm(x, p=2, dim=-1).mean()
+        self.x_l1 = torch.norm(x, p=1, dim=-1).mean()
 
     @property
     def total(self) -> torch.Tensor:
