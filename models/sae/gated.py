@@ -73,13 +73,13 @@ class GatedSAE(nn.Module, SparseAutoencoder):
         if self.l1_coefficient:
             # Use Gated (RI-L1) sparsity variant: https://arxiv.org/pdf/2407.14435
             scaled_pi_gate = F.relu(pi_gate) * self.W_dec.data.norm(dim=1)
-            sparsity_loss = F.l1_loss(scaled_pi_gate, torch.zeros_like(pi_gate)) * self.l1_coefficient
+            sparsity_loss = torch.norm(scaled_pi_gate, p=1, dim=-1).mean() * self.l1_coefficient
 
             # compute the auxiliary loss
             W_dec_clone = self.W_dec.clone().detach()
             b_dec_clone = self.b_dec.clone().detach()
             x_hat_frozen = nn.ReLU()(pi_gate) @ W_dec_clone + b_dec_clone
-            aux_loss = F.mse_loss(x_hat_frozen, x)
+            aux_loss = (x - x_hat_frozen).pow(2).sum(dim=-1).mean()
 
             output.loss = SAELossComponents(x, x_reconstructed, feature_magnitudes, sparsity_loss, aux_loss)
 

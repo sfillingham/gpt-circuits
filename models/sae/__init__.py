@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Optional, Protocol
 
 import torch
-from torch.nn import functional as F
 
 from config.sae.models import SAEConfig
 from config.sae.training import LossCoefficients
