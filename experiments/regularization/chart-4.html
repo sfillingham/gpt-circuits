@@ -2,6 +2,7 @@
 <html>
   <head>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.4.4/build/index.umd.min.js"></script>
   </head>
   <body>
     <div>
@@ -17,14 +18,13 @@
       function updateChart(datasets) {
         const ctx = document.getElementById(`Chart`);
         new Chart(ctx, {
-          type: "scatter",
+          type: "boxplot",
           data: {
-            labels: ["", "Embedding", "Layer 1", "Layer 2", "Layer 3", "Layer 4", ""],
+            labels: ["Embedding", "Layer 1", "Layer 2", "Layer 3", "Layer 4"],
             datasets: datasets,
           },
           options: {
             responsive: true,
-            showLine: true,
             tension: 0.25,
             scales: {
               x: {
@@ -39,13 +39,30 @@
                   display: true,
                   text: "Cross-Entropy Loss Increase",
                 },
+                min: 0,
               },
             },
+            meanRadius: 3,
+            backgroundColor: "transparent",
+            borderColor: "transparent",
+            elements: {
+              boxandwhiskers: {
+                itemRadius: 2,
+              },
+            },
+            coef: 10, // Include outliers
             plugins: {
               legend: {
                 labels: {
-                  filter: function (item, chart) {
-                    return item.text != "";
+                  generateLabels: (chart) => {
+                    const datasets = chart.data.datasets;
+                    return datasets.map((dataset, i) => {
+                      return {
+                        text: dataset.label,
+                        fillStyle: i == 0 ? "rgba(54, 162, 235, 1.0)" : "rgba(255, 99, 132, 1.0)",
+                        strokeStyle: i == 0 ? "rgba(54, 162, 235, 1.0)" : "rgba(255, 99, 132, 1.0)",
+                      };
+                    });
                   },
                 },
               },
@@ -71,45 +88,29 @@
         let original = data.original;
         let regularized = data.regularized;
 
-        function averageSweeps(data, label) {
-          return data.map((item) => ({
-            coefficient: item.coefficient,
-            x: label,
-            y: item.y.reduce((acc, val) => acc + val, 0) / item.y.length,
-          }));
-        }
+        let originalDataset = {
+          label: "Original Weights",
+          data: [],
+          meanBorderColor: "rgba(54, 162, 235, 1.0)",
+          meanBackgroundColor: "rgba(54, 162, 235, 1.0)",
+          itemBackgroundColor: "rgba(155, 208, 245, 0.5)",
+        };
+        let regularizedDataset = {
+          label: "Regularized Weights",
+          data: [],
+          meanBorderColor: "rgba(255, 99, 132, 1.0)",
+          meanBackgroundColor: "rgba(255, 99, 132, 1.0)",
+          itemBackgroundColor: "rgba(255, 177, 193, 0.5)",
+        };
 
-        let datasets = [];
         let layers = [0, 1, 2, 3, 4];
+        let numSweeps = data.original[0].length;
         for (let layerIdx of layers) {
-          let original = data.original[layerIdx];
-          let regularized = data.regularized[layerIdx];
-
-          let labels = ["Embedding", "Layer 1", "Layer 2", "Layer 3", "Layer 4"];
-          let originalData = averageSweeps(original, labels[layerIdx]);
-          let regularizedData = averageSweeps(regularized, labels[layerIdx]);
-
-          // Add averages
-          datasets.push({
-            label: layerIdx == layers[0] ? `Original Weights` : "",
-            data: [originalData.pop()],
-            borderColor: "#36A2EB",
-            backgroundColor: "#36A2EB",
-            borderWidth: 2,
-            pointStyle: "line",
-            pointRadius: 12,
-          });
-          datasets.push({
-            label: layerIdx == layers[0] ? `Regularized Weights` : "",
-            data: [regularizedData.pop()],
-            borderColor: "#FF6384",
-            backgroundColor: "#FF6384",
-            borderWidth: 2,
-            pointStyle: "line",
-            pointRadius: 12,
-          });
+          // Add data
+          originalDataset.data.push(data.original[layerIdx][0].y);
+          regularizedDataset.data.push(data.regularized[layerIdx][0].y);
         }
-        updateChart(datasets);
+        updateChart([originalDataset, regularizedDataset]);
       });
     </script>
   </body>

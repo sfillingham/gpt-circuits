@@ -1,102 +1,102 @@
 {
   "original": [
     {
-      "sum_coeffs": 0.00741,
-      "sum_l0s": 227.718605,
-      "ce_loss_increase": 0.97719,
-      "ce_loss": 1.57977
+      "sum_coeffs": 0.4406,
+      "sum_l0s": 248.67291,
+      "ce_loss_increase": 1.009777,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.009981,
-      "sum_l0s": 159.022682,
-      "ce_loss_increase": 1.496988,
-      "ce_loss": 1.57977
+      "sum_coeffs": 0.621086,
+      "sum_l0s": 158.709442,
+      "ce_loss_increase": 1.659678,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.012553,
-      "sum_l0s": 120.574075,
-      "ce_loss_increase": 1.955458,
-      "ce_loss": 1.57977
+      "sum_coeffs": 0.801571,
+      "sum_l0s": 113.915689,
+      "ce_loss_increase": 2.206302,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.015124,
-      "sum_l0s": 96.1465,
-      "ce_loss_increase": 2.343787,
-      "ce_loss": 1.57977
+      "sum_coeffs": 0.982057,
+      "sum_l0s": 89.366312,
+      "ce_loss_increase": 2.689166,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.017696,
-      "sum_l0s": 81.028371,
-      "ce_loss_increase": 2.672778,
-      "ce_loss": 1.57977
+      "sum_coeffs": 1.162543,
+      "sum_l0s": 73.138458,
+      "ce_loss_increase": 3.030332,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.020267,
-      "sum_l0s": 69.976508,
-      "ce_loss_increase": 2.98381,
-      "ce_loss": 1.57977
+      "sum_coeffs": 1.343029,
+      "sum_l0s": 61.84392,
+      "ce_loss_increase": 3.39395,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.022839,
-      "sum_l0s": 60.84465,
-      "ce_loss_increase": 3.182793,
-      "ce_loss": 1.57977
+      "sum_coeffs": 1.523514,
+      "sum_l0s": 54.025694,
+      "ce_loss_increase": 3.605544,
+      "ce_loss": 1.57179
     },
     {
-      "sum_coeffs": 0.02541,
-      "sum_l0s": 54.760665,
-      "ce_loss_increase": 3.361443,
-      "ce_loss": 1.57977
+      "sum_coeffs": 1.704,
+      "sum_l0s": 48.439997,
+      "ce_loss_increase": 3.830116,
+      "ce_loss": 1.57179
     }
   ],
   "regularized": [
     {
-      "sum_coeffs": 0.001105,
-      "sum_l0s": 220.335338,
-      "ce_loss_increase": 0.509697,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.0385,
+      "sum_l0s": 252.913936,
+      "ce_loss_increase": 0.348342,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.00151,
-      "sum_l0s": 157.259494,
-      "ce_loss_increase": 0.852031,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.0575,
+      "sum_l0s": 160.377513,
+      "ce_loss_increase": 0.704706,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.001915,
-      "sum_l0s": 120.048918,
-      "ce_loss_increase": 1.148881,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.0765,
+      "sum_l0s": 115.798615,
+      "ce_loss_increase": 1.036923,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.00232,
-      "sum_l0s": 96.209549,
-      "ce_loss_increase": 1.41778,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.0955,
+      "sum_l0s": 90.197379,
+      "ce_loss_increase": 1.319777,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.002725,
-      "sum_l0s": 79.964925,
-      "ce_loss_increase": 1.649471,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.1145,
+      "sum_l0s": 73.394622,
+      "ce_loss_increase": 1.565145,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.00313,
-      "sum_l0s": 68.112578,
-      "ce_loss_increase": 1.896129,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.1335,
+      "sum_l0s": 62.025462,
+      "ce_loss_increase": 1.810249,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.003535,
-      "sum_l0s": 59.546374,
-      "ce_loss_increase": 2.0566,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.1525,
+      "sum_l0s": 54.536044,
+      "ce_loss_increase": 2.002556,
+      "ce_loss": 1.55375
     },
     {
-      "sum_coeffs": 0.00394,
-      "sum_l0s": 52.784251,
-      "ce_loss_increase": 2.243222,
-      "ce_loss": 1.56817
+      "sum_coeffs": 0.1715,
+      "sum_l0s": 48.424819,
+      "ce_loss_increase": 2.179198,
+      "ce_loss": 1.55375
     }
   ]
 }
