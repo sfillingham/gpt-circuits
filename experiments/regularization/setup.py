@@ -80,8 +80,8 @@ class GatedSAEExperiment(Experiment):
     regularization_max_steps = 15000
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
-    regularization_coefficient = torch.tensor([3.0, 3.0, 3.0, 3.0, 3.0])
-    regularization_l1_coefficients = (0.1, 0.06, 0.1, 0.12, 0.2)  # Targets l0s ~ 10
+    regularization_coefficient = torch.tensor(2.0)
+    regularization_l1_coefficients = (0.1, 0.05, 0.1, 0.1, 0.1)  # Targets l0s ~ 10
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights

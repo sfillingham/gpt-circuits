@@ -44,7 +44,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
 
         # Gating network
         pi_gate = x_enc + self.b_gate
-        f_gate = (pi_gate > 0).float()  # whether to gate the feature
+        f_gate = (pi_gate > 0).to(self.W_gate.dtype)  # whether to gate the feature
 
         # Magnitude network
         pi_mag = x_enc * torch.exp(self.r_mag) + self.b_mag
