@@ -1,7 +1,7 @@
 """
 Train SAE weights for all layers concurrently.
 
-$ python -m training.sae.concurrent --config=standard.shakespeare_64x4.v0 --load_from=shakespeare_64x4
+$ python -m training.sae.concurrent --config=standard.shakespeare_64x4 --load_from=shakespeare_64x4
 """
 
 import argparse

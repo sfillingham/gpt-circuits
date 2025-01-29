@@ -14,6 +14,7 @@ from config.sae.training import LossCoefficients
 from models.gpt import GPT
 from models.sae import EncoderOutput, SAELossComponents
 from models.sae.gated import GatedSAE, GatedSAE_V2
+from models.sae.jumprelu import JumpReLUSAE
 from models.sae.standard import StandardSAE, StandardSAE_V2
 
 
@@ -280,5 +281,7 @@ class SparsifiedGPT(nn.Module):
                 return GatedSAE
             case SAEVariant.GATED_V2:
                 return GatedSAE_V2
+            case SAEVariant.JUMP_RELU:
+                return JumpReLUSAE
             case _:
                 raise ValueError(f"Unrecognized SAE variant: {self.sae_variant}")

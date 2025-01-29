@@ -13,6 +13,7 @@ class LossCoefficients:
     sparsity: tuple[float, ...] = ()
     regularization: Optional[torch.Tensor] = None  # For regularization experiment
     downstream: Optional[torch.Tensor] = None  # For end-to-end experiment
+    bandwidth: Optional[float] = None  # For JumpReLU
 
 
 @dataclass
@@ -63,6 +64,15 @@ options: dict[str, SAETrainingConfig] = map_options(
         loss_coefficients=LossCoefficients(
             sparsity=(0.50, 0.80, 0.80, 0.15, 0.80),
             downstream=torch.tensor(1.0),
+        ),
+    ),
+    SAETrainingConfig(
+        name="jumprelu.shakespeare_64x4",
+        sae_config=sae_options["standardx8.shakespeare_64x4"],
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            sparsity=(0.10, 0.10, 0.20, 0.20, 0.50),
+            bandwidth=0.1,
         ),
     ),
 )

@@ -10,13 +10,14 @@ class SAEVariant(str, Enum):
     STANDARD_V2 = "standard_v2"
     GATED = "gated"
     GATED_V2 = "gated_v2"
+    JUMP_RELU = "jumprelu"
 
 
 @dataclass
 class SAEConfig(Config):
     gpt_config: GPTConfig = field(default_factory=GPTConfig)
     n_features: tuple = ()  # Number of features in each layer
-    sae_variant: SAEVariant = SAEVariant.GATED_V2
+    sae_variant: SAEVariant = SAEVariant.STANDARD
 
     @property
     def block_size(self) -> int:
@@ -40,9 +41,9 @@ sae_options: dict[str, SAEConfig] = map_options(
         sae_variant=SAEVariant.STANDARD,
     ),
     SAEConfig(
-        name="gated_v2x8.shakespeare_64x4",
+        name="jumprelu.shakespeare_64x4",
         gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
-        sae_variant=SAEVariant.GATED_V2,
+        sae_variant=SAEVariant.JUMP_RELU,
     ),
 )
