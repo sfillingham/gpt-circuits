@@ -26,10 +26,10 @@ class SparsifiedGPTOutput:
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
     ce_loss_increases: Optional[torch.Tensor]
-    # End-to-end CE loss increase if using SAE reconstructions for trainable layers
-    e2e_kl_div: Optional[torch.Tensor]
-    e2e_ce_loss_increase: Optional[torch.Tensor]
+    # Compound cross-entropy loss increase if using SAE reconstructions for all trainable layers
+    compound_ce_loss_increase: Optional[torch.Tensor]
     sae_loss_components: dict[int, SAELossComponents]
+    feature_magnitudes: dict[int, torch.Tensor]
 
     @property
     def sae_losses(self) -> torch.Tensor:
@@ -60,21 +60,23 @@ class SparsifiedGPT(nn.Module):
         self.layer_idxs = trainable_layers if trainable_layers else list(range(len(config.n_features)))
         self.saes = nn.ModuleDict(dict([(f"{i}", sae_class(i, config, loss_coefficients)) for i in self.layer_idxs]))
 
-        # Should SAEs patch activations?
-        self.should_patch_activations = False
-
-    def forward(self, idx, targets=None, is_eval: bool = False) -> SparsifiedGPTOutput:
+    def forward(
+        self, idx: torch.Tensor, targets: Optional[torch.Tensor] = None, is_eval: bool = False
+    ) -> SparsifiedGPTOutput:
         """
         Forward pass of the sparsified model.
+
+        :param idx: Input tensor.
+        :param targets: Target tensor.
+        :param is_eval: Whether the model is in evaluation mode.
         """
         with self.use_saes() as encoder_outputs:
             logits, cross_entropy_loss = self.gpt(idx, targets)
 
         # If targets are provided during training evaluation, gather more metrics
         ce_loss_increases = None
-        e2e_ce_loss_increase = None
-        e2e_kl_div = None
-        if targets is not None and is_eval:
+        compound_ce_loss_increase = None
+        if is_eval and targets is not None:
             # Calculate cross-entropy loss increase for each SAE layer
             ce_loss_increases = []
             for layer_idx, output in encoder_outputs.items():
@@ -84,33 +86,26 @@ class SparsifiedGPT(nn.Module):
                 ce_loss_increases.append(sae_ce_loss - cross_entropy_loss)
             ce_loss_increases = torch.stack(ce_loss_increases)
 
-            # Calculate end-to-end metrics
-            with self.use_saes():
-                # SAEs should patch the residual stream.
-                self.should_patch_activations = True
-                e2e_logits, e2e_cross_entropy_loss = self.gpt(idx, targets)
-                e2e_ce_loss_increase = e2e_cross_entropy_loss - cross_entropy_loss
-                e2e_kl_div = F.kl_div(
-                    F.log_softmax(e2e_logits, dim=-1),
-                    F.softmax(logits, dim=-1),
-                    reduction="batchmean",
-                )
-                self.should_patch_activations = False
+            # Calculate compound cross-entropy loss as a result of patching activations.
+            with self.use_saes(patch_activations=True):
+                _, compound_cross_entropy_loss = self.gpt(idx, targets)
+                compound_ce_loss_increase = compound_cross_entropy_loss - cross_entropy_loss
 
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
             ce_loss_increases=ce_loss_increases,
-            e2e_kl_div=e2e_kl_div,
-            e2e_ce_loss_increase=e2e_ce_loss_increase,
+            compound_ce_loss_increase=compound_ce_loss_increase,
             sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
+            feature_magnitudes={i: output.feature_magnitudes for i, output in encoder_outputs.items()},
         )
 
     @contextmanager
-    def use_saes(self):
+    def use_saes(self, patch_activations: bool = False):
         """
         Context manager for using SAE layers during the forward pass.
 
+        :param patch_activations: Whether to patch activations.
         :yield encoder_outputs: Dictionary of encoder outputs.
         """
         # Dictionary for storing results
@@ -123,7 +118,7 @@ class SparsifiedGPT(nn.Module):
             sae = self.saes[f"{layer_idx}"]
             # Output values will be overwritten (hack to pass object by reference)
             output = EncoderOutput(torch.tensor(0), torch.tensor(0))
-            hook = self.create_hook(sae, output, layer_idx)
+            hook = self.create_hook(sae, output, patch_activations)
             hooks.append(target.register_forward_pre_hook(hook))  # type: ignore
             encoder_outputs[layer_idx] = output
 
@@ -135,13 +130,13 @@ class SparsifiedGPT(nn.Module):
             for hook in hooks:
                 hook.remove()
 
-    def create_hook(self, sae, output, layer_idx):
+    def create_hook(self, sae, output, patch_activations):
         """
         Create a forward pre-hook for the given layer index.
 
         :param sae: SAE module to use for the forward pass.
         :param output: Encoder output to be updated.
-        :param layer_idx: Layer index.
+        :param patch_activations: Whether to patch activations.
         """
 
         @torch.compiler.disable(recursive=False)  # type: ignore
@@ -155,10 +150,7 @@ class SparsifiedGPT(nn.Module):
             output.__dict__ = sae(x).__dict__
 
             # Patch activations if needed
-            if self.should_patch_activations:
-                return (output.reconstructed_activations,)
-            else:
-                return inputs
+            return (output.reconstructed_activations,) if patch_activations else inputs
 
         return hook
 

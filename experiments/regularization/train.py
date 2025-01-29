@@ -10,7 +10,7 @@ from config import TrainingConfig
 from config.gpt.training import options as gpt_training_options
 from experiments.regularization import (
     create_config,
-    export_e2e_results,
+    export_sums,
     export_sweep_results,
     sweep_training_parameters,
 )
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                     setup=setup,
                     name_prefix="regularization/saes/normal",
                     log_layers_to=base_dir / "saes.normal.csv",
-                    log_e2e_to=base_dir / "e2e.normal.csv",
+                    log_sums_to=base_dir / "sums.normal.csv",
                     load_from=base_dir / "model.normal",
                     starting_from=setup.sweep_normal_starting_coefficients,
                     ending_with=setup.sweep_normal_ending_coefficients,
@@ -120,7 +120,7 @@ if __name__ == "__main__":
                     setup=setup,
                     name_prefix="regularization/saes/regularized",
                     log_layers_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
-                    log_e2e_to=base_dir / f"{setup.experiment_name}.e2e.regularized.csv",
+                    log_sums_to=base_dir / f"{setup.experiment_name}.sums.regularized.csv",
                     load_from=base_dir / f"{setup.experiment_name}.model.regularized",
                     starting_from=setup.sweep_regularized_starting_coefficients,
                     ending_with=setup.sweep_regularized_ending_coefficients,
@@ -132,4 +132,4 @@ if __name__ == "__main__":
             Process CSV files and export results.json
             """
             export_sweep_results(setup, base_dir)
-            export_e2e_results(setup, base_dir)
+            export_sums(setup, base_dir)

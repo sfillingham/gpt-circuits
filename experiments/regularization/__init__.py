@@ -54,7 +54,7 @@ def sweep_training_parameters(
     setup: Experiment,
     name_prefix: str,
     log_layers_to: Path,
-    log_e2e_to: Path,
+    log_sums_to: Path,
     load_from: Path,
     starting_from: tuple[float, ...],
     ending_with: tuple[float, ...],
@@ -72,7 +72,7 @@ def sweep_training_parameters(
                 "name": f"{name_prefix}.{i}",
                 "load_from": load_from,
                 "log_layers_to": log_layers_to,
-                "log_e2e_to": log_e2e_to,
+                "log_sums_to": log_sums_to,
                 "l1_coefficients": coefficients,
             }
         )
@@ -96,7 +96,7 @@ def train_model(
     name: str,
     load_from: Path,
     log_layers_to: Path,
-    log_e2e_to: Path,
+    log_sums_to: Path,
     device: torch.device,
     l1_coefficients: tuple[float, ...],
 ):
@@ -121,12 +121,11 @@ def train_model(
             f.write(f"{layer},{coefficient:.6f},{l0:.6f},{ce_loss_increase:.6f}\n")
 
     # Log end-to-end metrics
-    with log_e2e_to.open("a") as f:
+    with log_sums_to.open("a") as f:
         data = []
         data.append(round(sum(l1_coefficients), 6))
         data.append(round(sum(trainer.checkpoint_l0s.tolist()), 6))
-        data.append(round(trainer.checkpoint_e2e_ce_loss_increase.item(), 6))
-        data.append(round(trainer.checkpoint_e2e_kl_div.item(), 6))
+        data.append(round(trainer.checkpoint_compound_ce_loss_increase.item(), 6))
         f.write(",".join(map(str, data)) + "\n")
 
 
@@ -190,9 +189,9 @@ def export_sweep_results(setup: Experiment, base_dir: Path):
         json.dump(data, f, indent=4)
 
 
-def export_e2e_results(setup: Experiment, base_dir: Path):
+def export_sums(setup: Experiment, base_dir: Path):
     """
-    Export end-to-end results to JSON files.
+    Export sums and compound losses to JSON files.
     """
     # Read CE losses
     normal_ce_losses = pd.read_csv(base_dir / "model.normal.csv", header=None, names=("ce_loss",))
@@ -211,36 +210,22 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
     with open(base_dir / f"{setup.experiment_name}.results.models.json", "w") as f:
         json.dump(ce_loss_data, f, indent=4)
 
-    # Repeat each row setup.num_sweep_steps times
-    normal_ce_losses = normal_ce_losses.loc[normal_ce_losses.index.repeat(setup.num_sweep_steps)].reset_index(
-        drop=True
-    )
-    regularized_ce_losses = regularized_ce_losses.loc[
-        regularized_ce_losses.index.repeat(setup.num_sweep_steps)
-    ].reset_index(drop=True)
-
-    # Read end-to-end metrics
-    column_names = ["sum_coeffs", "sum_l0s", "ce_loss_increase", "kl_div"]
+    # Read sums
+    column_names = ["sum_coeffs", "sum_l0s", "ce_loss_increase"]
     normal_csv = pd.read_csv(
-        base_dir / "e2e.normal.csv",
+        base_dir / "sums.normal.csv",
         header=None,
         names=column_names,
     )
     regularized_csv = pd.read_csv(
-        base_dir / f"{setup.experiment_name}.e2e.regularized.csv",
+        base_dir / f"{setup.experiment_name}.sums.regularized.csv",
         header=None,
         names=column_names,
     )
 
-    # Append CE loss column to end-to-end metrics
-    normal_csv["ce_loss"] = normal_ce_losses
-    regularized_csv["ce_loss"] = regularized_ce_losses
-
     # Group by 'sum_coeffs' and calculate the mean for 'sum_l0s' and 'ce_loss_increase'
-    grouped_normal = normal_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase", "ce_loss"]].mean().reset_index()
-    grouped_regularized = (
-        regularized_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase", "ce_loss"]].mean().reset_index()
-    )
+    grouped_normal = normal_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase"]].mean().reset_index()
+    grouped_regularized = regularized_csv.groupby("sum_coeffs")[["sum_l0s", "ce_loss_increase"]].mean().reset_index()
 
     # Sweep data
     sweep_data = {"original": [], "regularized": []}
@@ -250,7 +235,6 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
                 "sum_coeffs": round(row["sum_coeffs"], 6),
                 "sum_l0s": round(row["sum_l0s"], 6),
                 "ce_loss_increase": round(row["ce_loss_increase"], 6),
-                "ce_loss": round(row["ce_loss"], 6),
             }
         )
     for _, row in grouped_regularized.iterrows():
@@ -259,10 +243,9 @@ def export_e2e_results(setup: Experiment, base_dir: Path):
                 "sum_coeffs": round(row["sum_coeffs"], 6),
                 "sum_l0s": round(row["sum_l0s"], 6),
                 "ce_loss_increase": round(row["ce_loss_increase"], 6),
-                "ce_loss": round(row["ce_loss"], 6),
             }
         )
 
     # Export to JSON
-    with open(base_dir / f"{setup.experiment_name}.results.e2e.json", "w") as f:
+    with open(base_dir / f"{setup.experiment_name}.results.sums.json", "w") as f:
         json.dump(sweep_data, f, indent=4)

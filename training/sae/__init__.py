@@ -23,26 +23,7 @@ class SAETrainer(Trainer):
 
         # Only include metrics if in evaluation mode
         if is_eval:
-            # Add SAE metrics
-            sae_l0s = torch.stack([loss_components.l0 for loss_components in output.sae_loss_components.values()])
-            metrics = {
-                "loss": loss,
-                "ce_loss": output.cross_entropy_loss,
-                "sae_losses": output.sae_losses,
-                "ce_loss_increases": output.ce_loss_increases,
-                "e2e_kl_div": output.e2e_kl_div,
-                "e2e_ce_loss_increase": output.e2e_ce_loss_increase,
-                "l0s": sae_l0s,
-            }
-
-            # Add extra GPT metrics
-            metrics.update(
-                {
-                    "stream_l1s": torch.stack(
-                        [sae_loss_components.x_l1 for sae_loss_components in output.sae_loss_components.values()]
-                    )
-                }
-            )
+            metrics = self.gather_metrics(loss, output)
 
         return loss, metrics
 
@@ -51,6 +32,32 @@ class SAETrainer(Trainer):
         Convert model output to loss.
         """
         ...
+
+    def gather_metrics(self, loss: torch.Tensor, output: SparsifiedGPTOutput) -> dict[str, torch.Tensor]:
+        """
+        Gather metrics from loss and model output.
+        """
+        # Add SAE metrics
+        sae_l0s = torch.stack([loss_components.l0 for loss_components in output.sae_loss_components.values()])
+        metrics = {
+            "loss": loss,
+            "ce_loss": output.cross_entropy_loss,
+            "sae_losses": output.sae_losses,
+            "ce_loss_increases": output.ce_loss_increases,
+            "compound_ce_loss_increase": output.compound_ce_loss_increase,
+            "l0s": sae_l0s,
+        }
+
+        # Add extra GPT metrics
+        metrics.update(
+            {
+                "stream_l1s": torch.stack(
+                    [sae_loss_components.x_l1 for sae_loss_components in output.sae_loss_components.values()]
+                )
+            }
+        )
+
+        return metrics
 
     def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
         """
