@@ -72,7 +72,7 @@ options: dict[str, SAETrainingConfig] = map_options(
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
             sparsity=(0.10, 0.10, 0.20, 0.20, 0.50),
-            bandwidth=0.1,
+            bandwidth=0.01,
         ),
     ),
 )
