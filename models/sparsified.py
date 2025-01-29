@@ -2,7 +2,7 @@ import dataclasses
 import json
 import os
 from contextlib import contextmanager
-from typing import Optional
+from typing import Iterable, Optional
 
 import torch
 import torch.nn as nn
@@ -30,6 +30,7 @@ class SparsifiedGPTOutput:
     compound_ce_loss_increase: Optional[torch.Tensor]
     sae_loss_components: dict[int, SAELossComponents]
     feature_magnitudes: dict[int, torch.Tensor]
+    reconstructed_activations: dict[int, torch.Tensor]
 
     @property
     def sae_losses(self) -> torch.Tensor:
@@ -81,13 +82,13 @@ class SparsifiedGPT(nn.Module):
             ce_loss_increases = []
             for layer_idx, output in encoder_outputs.items():
                 x = output.reconstructed_activations
-                sae_logits = self.gpt.forward_with_patched_activations(idx, x, layer_idx)
+                sae_logits = self.gpt.forward_with_patched_activations(x, layer_idx)
                 sae_ce_loss = F.cross_entropy(sae_logits.view(-1, sae_logits.size(-1)), targets.view(-1))
                 ce_loss_increases.append(sae_ce_loss - cross_entropy_loss)
             ce_loss_increases = torch.stack(ce_loss_increases)
 
             # Calculate compound cross-entropy loss as a result of patching activations.
-            with self.use_saes(patch_activations=True):
+            with self.use_saes(layers_to_patch=self.layer_idxs):
                 _, compound_cross_entropy_loss = self.gpt(idx, targets)
                 compound_ce_loss_increase = compound_cross_entropy_loss - cross_entropy_loss
 
@@ -98,14 +99,15 @@ class SparsifiedGPT(nn.Module):
             compound_ce_loss_increase=compound_ce_loss_increase,
             sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
             feature_magnitudes={i: output.feature_magnitudes for i, output in encoder_outputs.items()},
+            reconstructed_activations={i: output.reconstructed_activations for i, output in encoder_outputs.items()},
         )
 
     @contextmanager
-    def use_saes(self, patch_activations: bool = False):
+    def use_saes(self, layers_to_patch: Iterable[int] = ()):
         """
         Context manager for using SAE layers during the forward pass.
 
-        :param patch_activations: Whether to patch activations.
+        :param layers_to_patch: Layer indices for patching residual stream activations with reconstructions.
         :yield encoder_outputs: Dictionary of encoder outputs.
         """
         # Dictionary for storing results
@@ -118,7 +120,8 @@ class SparsifiedGPT(nn.Module):
             sae = self.saes[f"{layer_idx}"]
             # Output values will be overwritten (hack to pass object by reference)
             output = EncoderOutput(torch.tensor(0), torch.tensor(0))
-            hook = self.create_hook(sae, output, patch_activations)
+            should_patch_activations = layer_idx in layers_to_patch
+            hook = self.create_hook(sae, output, should_patch_activations)
             hooks.append(target.register_forward_pre_hook(hook))  # type: ignore
             encoder_outputs[layer_idx] = output
 
@@ -130,13 +133,13 @@ class SparsifiedGPT(nn.Module):
             for hook in hooks:
                 hook.remove()
 
-    def create_hook(self, sae, output, patch_activations):
+    def create_hook(self, sae, output, should_patch_activations):
         """
         Create a forward pre-hook for the given layer index.
 
         :param sae: SAE module to use for the forward pass.
         :param output: Encoder output to be updated.
-        :param patch_activations: Whether to patch activations.
+        :param should_patch_activations: Whether to patch activations.
         """
 
         @torch.compiler.disable(recursive=False)  # type: ignore
@@ -150,7 +153,7 @@ class SparsifiedGPT(nn.Module):
             output.__dict__ = sae(x).__dict__
 
             # Patch activations if needed
-            return (output.reconstructed_activations,) if patch_activations else inputs
+            return (output.reconstructed_activations,) if should_patch_activations else inputs
 
         return hook
 

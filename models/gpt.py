@@ -137,11 +137,10 @@ class GPT(nn.Module):
 
         return (logits, None)
 
-    def forward_with_patched_activations(self, idx: torch.Tensor, x: torch.Tensor, layer_idx: int) -> torch.Tensor:
+    def forward_with_patched_activations(self, x: torch.Tensor, layer_idx: int) -> torch.Tensor:
         """
         Forward pass of the model with patched activations.
 
-        :param idx: Input token indices.
         :param x: Patched activations.
         :param layer_idx: Layer index. 0 patches activations just before the first transformer block.
         """
