@@ -25,6 +25,8 @@ class SparsifiedGPTOutput:
 
     logits: torch.Tensor
     cross_entropy_loss: torch.Tensor
+    # Residual stream activations at every layer
+    activations: dict[int, torch.Tensor]
     ce_loss_increases: Optional[torch.Tensor]
     # Compound cross-entropy loss increase if using SAE reconstructions for all trainable layers
     compound_ce_loss_increase: Optional[torch.Tensor]
@@ -71,8 +73,9 @@ class SparsifiedGPT(nn.Module):
         :param targets: Target tensor.
         :param is_eval: Whether the model is in evaluation mode.
         """
-        with self.use_saes() as encoder_outputs:
-            logits, cross_entropy_loss = self.gpt(idx, targets)
+        with self.record_activations() as activations:
+            with self.use_saes() as encoder_outputs:
+                logits, cross_entropy_loss = self.gpt(idx, targets)
 
         # If targets are provided during training evaluation, gather more metrics
         ce_loss_increases = None
@@ -95,12 +98,51 @@ class SparsifiedGPT(nn.Module):
         return SparsifiedGPTOutput(
             logits=logits,
             cross_entropy_loss=cross_entropy_loss,
+            activations=activations,
             ce_loss_increases=ce_loss_increases,
             compound_ce_loss_increase=compound_ce_loss_increase,
             sae_loss_components={i: output.loss for i, output in encoder_outputs.items() if output.loss},
             feature_magnitudes={i: output.feature_magnitudes for i, output in encoder_outputs.items()},
             reconstructed_activations={i: output.reconstructed_activations for i, output in encoder_outputs.items()},
         )
+
+    @contextmanager
+    def record_activations(self):
+        """
+        Context manager for recording residual stream activations.
+
+        :yield activations: Dictionary of activations.
+        """
+        # Dictionary for storing results
+        activations: dict[int, torch.Tensor] = {}
+
+        # Register hooks
+        hooks = []
+        for layer_idx in list(range(len(self.config.n_features))):
+            target = self.get_hook_target(layer_idx)
+            hook = self.create_activation_hook(activations, layer_idx)
+            hooks.append(target.register_forward_pre_hook(hook))  # type: ignore
+
+        try:
+            yield activations
+
+        finally:
+            # Unregister hooks
+            for hook in hooks:
+                hook.remove()
+
+    def create_activation_hook(self, activations, layer_idx):
+        """
+        Create a forward pre-hook for the given layer index for recording activations.
+
+        :param activations: Dictionary for storing activations.
+        :param layer_idx: Layer index to record activations for.
+        """
+
+        def activation_hook(_, inputs):
+            activations[layer_idx] = inputs[0]
+
+        return activation_hook
 
     @contextmanager
     def use_saes(self, layers_to_patch: Iterable[int] = ()):
@@ -121,7 +163,7 @@ class SparsifiedGPT(nn.Module):
             # Output values will be overwritten (hack to pass object by reference)
             output = EncoderOutput(torch.tensor(0), torch.tensor(0))
             should_patch_activations = layer_idx in layers_to_patch
-            hook = self.create_hook(sae, output, should_patch_activations)
+            hook = self.create_sae_hook(sae, output, should_patch_activations)
             hooks.append(target.register_forward_pre_hook(hook))  # type: ignore
             encoder_outputs[layer_idx] = output
 
@@ -133,9 +175,9 @@ class SparsifiedGPT(nn.Module):
             for hook in hooks:
                 hook.remove()
 
-    def create_hook(self, sae, output, should_patch_activations):
+    def create_sae_hook(self, sae, output, should_patch_activations):
         """
-        Create a forward pre-hook for the given layer index.
+        Create a forward pre-hook for the given layer index for applying sparse autoencoding.
 
         :param sae: SAE module to use for the forward pass.
         :param output: Encoder output to be updated.
@@ -143,7 +185,7 @@ class SparsifiedGPT(nn.Module):
         """
 
         @torch.compiler.disable(recursive=False)  # type: ignore
-        def hook(_, inputs):
+        def sae_hook(_, inputs):
             """
             NOTE: Compiling seems to struggle with branching logic, and so we disable it (non-recursively).
             """
@@ -155,7 +197,7 @@ class SparsifiedGPT(nn.Module):
             # Patch activations if needed
             return (output.reconstructed_activations,) if should_patch_activations else inputs
 
-        return hook
+        return sae_hook
 
     def get_hook_target(self, layer_idx) -> nn.Module:
         """

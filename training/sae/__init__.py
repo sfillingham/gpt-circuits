@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 from torch.optim import Optimizer
 
+from config.sae.training import SAETrainingConfig
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 from training import Trainer
 from training.gpt import GPTTrainer
@@ -12,6 +13,8 @@ class SAETrainer(Trainer):
     """
     Base class for sparsified GPT trainers.
     """
+
+    config: SAETrainingConfig
 
     def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """

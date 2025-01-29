@@ -1,7 +1,7 @@
 """
 Train SAE weights for all layers concurrently.
 
-$ python -m training.sae.concurrent --config=standardx8.shakespeare_64x4.v0 --load_from=shakespeare_64x4 --name=sae.shakespeare_64x4.v0
+$ python -m training.sae.concurrent --config=standard.shakespeare_64x4.v0 --load_from=shakespeare_64x4
 """
 
 import argparse
@@ -105,7 +105,8 @@ if __name__ == "__main__":
     config = options[config_name]
 
     # Update outdir
-    config.name = args.name
+    if args.name:
+        config.name = args.name
 
     # Initialize trainer
     trainer = ConcurrentTrainer(config, load_from=TrainingConfig.checkpoints_dir / args.load_from)

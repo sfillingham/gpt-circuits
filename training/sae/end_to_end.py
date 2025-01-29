@@ -1,7 +1,7 @@
 """
 Train SAE weights using "End-to-End Sparse Dictionary Learning" for all layers concurrently.
 
-$ python -m training.sae.end_to_end --config=standardx8.shakespeare_64x4.v0 --load_from=shakespeare_64x4 --name=sae.shakespeare_64x4.v0
+$ python -m training.sae.end_to_end --config=end-to-end.shakespeare_64x4 --load_from=shakespeare_64x4
 """
 
 import argparse
@@ -38,40 +38,50 @@ class EndToEndTrainer(ConcurrentTrainer):
         Return a stack of end-to-end losses, one for each trainable layer.
         """
         losses = []
-        for layer_idx, reconstructed_activations in output.reconstructed_activations.items():
-            losses.append(self.calculate_e2e_loss(layer_idx, reconstructed_activations, output.logits))
+        for layer_idx in output.sae_loss_components.keys():
+            e2e_loss = self.calculate_e2e_loss(output, layer_idx)
+            losses.append(e2e_loss)
 
         return torch.stack(losses)
 
-    def calculate_e2e_loss(
-        self, layer_idx: int, reconstructed_activations: torch.Tensor, target_logits: torch.Tensor
-    ) -> torch.Tensor:
+    def calculate_e2e_loss(self, output: SparsifiedGPTOutput, layer_idx: int) -> torch.Tensor:
         """
         Calculate end-to-end loss for a single layer.
 
+        :param output: Sparsified model output.
         :param layer_idx: Index of the layer to calculate loss for.
-        :param reconstructed_activations: Reconstructed residual stream activations at this layer.
-        :param target: Target logits.
         """
-        vocab_size = target_logits.size(-1)
+        target_logits = output.logits
+        vocab_size = output.logits.size(-1)
         n_blocks = len(self.model.gpt.transformer.h)
-        target_layers = list(range(layer_idx + 1, n_blocks))
+        reconstructed_activations = output.reconstructed_activations[layer_idx]
 
         # Forward pass with reconstructed activations
-        with self.collect_activations(target_layers=target_layers) as activations:
-            reconstructed_logits = self.model.gpt.forward_with_patched_activations(
-                reconstructed_activations, layer_idx
-            )
+        target_layers = list(range(layer_idx + 1, n_blocks))  # Never target the last layer
+        with self.collect_activations(target_layers=target_layers) as predicted_activations:
+            predicted_logits = self.model.gpt.forward_with_patched_activations(reconstructed_activations, layer_idx)
 
-        # TODO: Caculate downstream reconstruction loss
+        # Caculate downstream reconstruction loss
+        downstream_losses = []
+        for downstream_layer_idx, x_predicted in predicted_activations.items():
+            x = output.activations[downstream_layer_idx]
+            downstream_loss = (x - x_predicted).pow(2).sum(dim=-1).mean()
+            downstream_loss *= self.config.loss_coefficients.downstream  # Scale by downstream loss coefficient
+            downstream_losses.append(downstream_loss)
+        assert self.config.loss_coefficients.downstream is not None, "Downstream loss coefficient must be set"
+        downstream_loss = torch.stack(downstream_losses).mean() if downstream_losses else torch.tensor(0.0)
 
         # Calculate KL divergence between target and reconstructed logits
         kl_div = torch.nn.functional.kl_div(
-            torch.nn.functional.log_softmax(reconstructed_logits, dim=-1).view(-1, vocab_size),
+            torch.nn.functional.log_softmax(predicted_logits, dim=-1).view(-1, vocab_size),
             torch.nn.functional.softmax(target_logits, dim=-1).view(-1, vocab_size),
             reduction="batchmean",
         )
-        return kl_div
+
+        # Reuse original sparsity loss
+        sparsity_loss = output.sae_loss_components[layer_idx].sparsity
+
+        return kl_div + sparsity_loss + downstream_loss
 
     @contextmanager
     def collect_activations(self, target_layers: Iterable[int] = ()):
@@ -89,7 +99,8 @@ class EndToEndTrainer(ConcurrentTrainer):
         for layer_idx in target_layers:
             assert layer_idx > 0, "Must target activations after the first transformer block"
             target = self.model.gpt.transformer.h[layer_idx - 1]
-            # TODO: Implement hook
+            hook = self.create_hook(activations, layer_idx)
+            hooks.append(target.register_forward_hook(hook))
 
         try:
             yield activations
@@ -98,6 +109,19 @@ class EndToEndTrainer(ConcurrentTrainer):
             # Unregister hooks
             for hook in hooks:
                 hook.remove()
+
+    def create_hook(self, activations, layer_idx):
+        """
+        Create a forward hook that records activations after the forward pass.
+
+        :param activations: List for storing activations.
+        :param layer_idx: Index of the layer to record activations for.
+        """
+
+        def hook(_, input, output):
+            activations[layer_idx] = output
+
+        return hook
 
 
 if __name__ == "__main__":
@@ -109,7 +133,8 @@ if __name__ == "__main__":
     config = options[config_name]
 
     # Update outdir
-    config.name = args.name
+    if args.name:
+        config.name = args.name
 
     # Initialize trainer
     trainer = EndToEndTrainer(config, load_from=TrainingConfig.checkpoints_dir / args.load_from)

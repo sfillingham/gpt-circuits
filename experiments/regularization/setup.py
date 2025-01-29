@@ -19,7 +19,7 @@ class Experiment(Protocol):
     regularization_learning_rate: float
     regularization_min_lr: float
     regularization_coefficient: torch.Tensor
-    regularization_l1_coefficients: tuple[float, ...]
+    regularization_sparsity_coefficients: tuple[float, ...]
     regularization_trainable_layers: tuple[int, ...] | None
 
     # Sweep range for SAE training on model using normal weights
@@ -51,7 +51,7 @@ class RegularizeAllLayersExperiment(Experiment):
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
     regularization_coefficient = torch.tensor(3.0)
-    regularization_l1_coefficients = (0.020, 0.035, 0.085, 0.07, 0.075)  # Targets l0s ~ 10
+    regularization_sparsity_coefficients = (0.020, 0.035, 0.085, 0.07, 0.075)  # Targets l0s ~ 10
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights
@@ -81,7 +81,7 @@ class GatedSAEExperiment(Experiment):
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
     regularization_coefficient = torch.tensor(2.0)
-    regularization_l1_coefficients = (0.1, 0.05, 0.1, 0.1, 0.1)  # Targets l0s ~ 10
+    regularization_sparsity_coefficients = (0.1, 0.05, 0.1, 0.1, 0.1)  # Targets l0s ~ 10
     regularization_trainable_layers = (0, 1, 2, 3, 4)
 
     # Sweep range for SAE training on model using normal weights

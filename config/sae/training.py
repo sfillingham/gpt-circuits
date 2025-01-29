@@ -10,8 +10,9 @@ from .models import SAEConfig, sae_options
 
 @dataclass
 class LossCoefficients:
-    l1: tuple[float, ...] = ()
-    regularization: Optional[torch.Tensor] = None  # For experiments
+    sparsity: tuple[float, ...] = ()
+    regularization: Optional[torch.Tensor] = None  # For regularization experiment
+    downstream: Optional[torch.Tensor] = None  # For end-to-end experiment
 
 
 @dataclass
@@ -39,20 +40,29 @@ shakespeare_64x4_defaults = {
 # Training configuration options
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
-        name="standardx8.shakespeare_64x4.v0",
+        name="standard.shakespeare_64x4.v0",
         sae_config=sae_options["standardx8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(0.001, 0.001, 0.002, 0.003, 0.006),
+            sparsity=(0.001, 0.001, 0.002, 0.003, 0.006),
         ),
     ),
     SAETrainingConfig(
-        name="standardx8.shakespeare_64x4.v1",
+        name="regularized.shakespeare_64x4",
         sae_config=sae_options["standardx8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=(0.01, 0.03, 0.05, 0.05, 0.05),
-            regularization=torch.tensor(10000.0),
+            sparsity=(0.020, 0.035, 0.085, 0.07, 0.075),
+            regularization=torch.tensor(3.0),
+        ),
+    ),
+    SAETrainingConfig(
+        name="end-to-end.shakespeare_64x4",
+        sae_config=sae_options["standardx8.shakespeare_64x4"],
+        **shakespeare_64x4_defaults,
+        loss_coefficients=LossCoefficients(
+            sparsity=(0.50, 0.80, 0.80, 0.15, 0.80),
+            downstream=torch.tensor(1.0),
         ),
     ),
 )

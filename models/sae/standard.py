@@ -18,7 +18,7 @@ class StandardSAE(nn.Module, SparseAutoencoder):
         super().__init__()
         F = config.n_features[layer_idx]  # SAE dictionary size.
         n_embd = config.gpt_config.n_embd  # GPT embedding size.
-        self.l1_coefficient = loss_coefficients.l1[layer_idx] if loss_coefficients else None
+        self.l1_coefficient = loss_coefficients.sparsity[layer_idx] if loss_coefficients else None
         self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, n_embd)))
 
         self.b_enc = nn.Parameter(torch.zeros(F))

@@ -23,7 +23,7 @@ from training.sae.concurrent import ConcurrentTrainer
 def create_config(
     setup: Experiment,
     name: str,
-    l1_coefficients: tuple[float, ...],
+    sparsity_coefficients: tuple[float, ...],
     trainable_layers: tuple[int, ...] | None = None,
     device: torch.device | None = None,
 ) -> SAETrainingConfig:
@@ -39,7 +39,7 @@ def create_config(
         ),
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            l1=l1_coefficients,
+            sparsity=sparsity_coefficients,
         ),
         trainable_layers=trainable_layers,
     )
@@ -73,7 +73,7 @@ def sweep_training_parameters(
                 "load_from": load_from,
                 "log_layers_to": log_layers_to,
                 "log_sums_to": log_sums_to,
-                "l1_coefficients": coefficients,
+                "sparsity_coefficients": coefficients,
             }
         )
 
@@ -98,13 +98,13 @@ def train_model(
     log_layers_to: Path,
     log_sums_to: Path,
     device: torch.device,
-    l1_coefficients: tuple[float, ...],
+    sparsity_coefficients: tuple[float, ...],
 ):
     """
     Train a model with specific loss coefficients and log results.
     """
     # Load configuration
-    config = create_config(setup, name, l1_coefficients, device=device)
+    config = create_config(setup, name, sparsity_coefficients, device=device)
 
     # Train model
     trainer = ConcurrentTrainer(config, load_from=load_from)
@@ -113,7 +113,7 @@ def train_model(
     # Log layers
     for layer, coefficient, l0, ce_loss_increase in zip(
         [layer_name for layer_name in trainer.model.saes.keys()],
-        l1_coefficients,
+        sparsity_coefficients,
         trainer.checkpoint_l0s,
         trainer.checkpoint_ce_loss_increases,
     ):
@@ -123,7 +123,7 @@ def train_model(
     # Log end-to-end metrics
     with log_sums_to.open("a") as f:
         data = []
-        data.append(round(sum(l1_coefficients), 6))
+        data.append(round(sum(sparsity_coefficients), 6))
         data.append(round(sum(trainer.checkpoint_l0s.tolist()), 6))
         data.append(round(trainer.checkpoint_compound_ce_loss_increase.item(), 6))
         f.write(",".join(map(str, data)) + "\n")

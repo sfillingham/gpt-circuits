@@ -74,7 +74,7 @@ if __name__ == "__main__":
             config = create_config(
                 setup=setup,
                 name=f"regularization/{setup.experiment_name}.model.regularized",
-                l1_coefficients=setup.regularization_l1_coefficients,
+                sparsity_coefficients=setup.regularization_sparsity_coefficients,
                 trainable_layers=setup.regularization_trainable_layers,
             )
             # Set learning rate parameters
