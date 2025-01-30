@@ -63,12 +63,12 @@ class EndToEndTrainer(ConcurrentTrainer):
 
         # Caculate downstream reconstruction loss
         downstream_losses = []
+        assert self.config.loss_coefficients.downstream is not None, "Downstream loss coefficient must be set"
         for downstream_layer_idx, x_predicted in predicted_activations.items():
             x = output.activations[downstream_layer_idx]
             downstream_loss = (x - x_predicted).pow(2).sum(dim=-1).mean()
             downstream_loss *= self.config.loss_coefficients.downstream  # Scale by downstream loss coefficient
             downstream_losses.append(downstream_loss)
-        assert self.config.loss_coefficients.downstream is not None, "Downstream loss coefficient must be set"
         downstream_loss = torch.stack(downstream_losses).mean() if downstream_losses else torch.tensor(0.0)
 
         # Calculate KL divergence between target and reconstructed logits
