@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 
 from config.gpt.models import GPTConfig, gpt_options
-from config.sae.models import SAEConfig
+from config.sae.models import SAEConfig, SAEVariant
 from config.sae.training import SAETrainingConfig, shakespeare_64x4_defaults
 from experiments import ParameterSweeper
 from experiments.regularization.setup import (  # noqa: F401
@@ -21,6 +21,7 @@ from training.sae.concurrent import ConcurrentTrainer
 def create_config(
     setup: Experiment,
     name: str,
+    sae_variant: SAEVariant,
     sparsity_coefficients: Optional[tuple[float, ...]] = None,
     device: torch.device | None = None,
 ) -> SAETrainingConfig:
@@ -37,7 +38,7 @@ def create_config(
         sae_config=SAEConfig(
             gpt_config=gpt_options["ascii_64x4"],
             n_features=setup.n_features,
-            sae_variant=setup.sae_variant,
+            sae_variant=sae_variant,
         ),
         **shakespeare_64x4_defaults,
         loss_coefficients=loss_coefficients,
@@ -69,6 +70,7 @@ def sweep_training_parameters(
             {
                 "setup": setup,
                 "name": f"{name_prefix}.{i}",
+                "sae_variant": setup.sweep_sae_variant,
                 "load_from": load_from,
                 "log_layers_to": log_layers_to,
                 "log_sums_to": log_sums_to,
@@ -93,6 +95,7 @@ def sweep_training_parameters(
 def train_model(
     setup: Experiment,
     name: str,
+    sae_variant: SAEVariant,
     load_from: Path,
     log_layers_to: Path,
     log_sums_to: Path,
@@ -103,7 +106,7 @@ def train_model(
     Train a model with specific loss coefficients and log results.
     """
     # Load configuration
-    config = create_config(setup, name, sparsity_coefficients, device=device)
+    config = create_config(setup, name, sae_variant, sparsity_coefficients, device=device)
 
     # Train model
     trainer = ConcurrentTrainer(config, load_from=load_from)

@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 import torch
@@ -78,7 +79,8 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
 class JumpReLU(nn.Module):
     def __init__(self, feature_size, bandwidth):
         super(JumpReLU, self).__init__()
-        self.log_threshold = nn.Parameter(torch.zeros(feature_size))
+        # NOTE: Training doesn't seem to converge unless starting with log_threshold == log(bandwidth).
+        self.log_threshold = nn.Parameter(torch.full((feature_size,), math.log(bandwidth)))
         self.bandwidth = bandwidth
 
     def forward(self, x):
@@ -86,31 +88,35 @@ class JumpReLU(nn.Module):
         return JumpReLUFunction.apply(x, threshold, self.bandwidth)
 
 
-class JumpReLUFunction(autograd.Function):
+class RectangleFunction(autograd.Function):
     @staticmethod
-    def rectangle(x) -> torch.Tensor:
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
         return ((x > -0.5) & (x < 0.5)).float()
 
     @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        grad_input = grad_output.clone()
+        grad_input[(x <= -0.5) | (x >= 0.5)] = 0
+        return grad_input
+
+
+class JumpReLUFunction(autograd.Function):
+    @staticmethod
     def forward(ctx, x, threshold, bandwidth):
         ctx.save_for_backward(x, threshold, torch.tensor(bandwidth))
-        return x * (x > threshold)
+        return x * (x > threshold).float()
 
     @staticmethod
     def backward(ctx, grad_output):
         x, threshold, bandwidth = ctx.saved_tensors
-        x_grad = (x > threshold) * grad_output
-        threshold_grad = (
-            -(threshold / bandwidth) * JumpReLUFunction.rectangle((x - threshold) / bandwidth) * grad_output
-        )
+        x_grad = (x > threshold).float() * grad_output
+        threshold_grad = -(threshold / bandwidth) * RectangleFunction.apply((x - threshold) / bandwidth) * grad_output
         return x_grad, threshold_grad, None  # None for bandwidth
 
 
 class StepFunction(autograd.Function):
-    @staticmethod
-    def rectangle(x) -> torch.Tensor:
-        return ((x > -0.5) & (x < 0.5)).float()
-
     @staticmethod
     def forward(ctx, x, threshold, bandwidth) -> torch.Tensor:
         ctx.save_for_backward(x, threshold, torch.tensor(bandwidth))
@@ -119,6 +125,6 @@ class StepFunction(autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         x, threshold, bandwidth = ctx.saved_tensors
-        x_grad = torch.zeros_like(grad_output)
-        threshold_grad = -(1.0 / bandwidth) * StepFunction.rectangle((x - threshold) / bandwidth) * grad_output
+        x_grad = torch.zeros_like(x)
+        threshold_grad = -(1.0 / bandwidth) * RectangleFunction.apply((x - threshold) / bandwidth) * grad_output
         return x_grad, threshold_grad, None  # None for bandwidth

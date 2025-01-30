@@ -41,7 +41,7 @@ shakespeare_64x4_defaults = {
 # Training configuration options
 options: dict[str, SAETrainingConfig] = map_options(
     SAETrainingConfig(
-        name="standard.shakespeare_64x4.v0",
+        name="standard.shakespeare_64x4",
         sae_config=sae_options["standardx8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
@@ -68,11 +68,11 @@ options: dict[str, SAETrainingConfig] = map_options(
     ),
     SAETrainingConfig(
         name="jumprelu.shakespeare_64x4",
-        sae_config=sae_options["standardx8.shakespeare_64x4"],
+        sae_config=sae_options["jumprelu-x8.shakespeare_64x4"],
         **shakespeare_64x4_defaults,
         loss_coefficients=LossCoefficients(
-            sparsity=(0.10, 0.10, 0.20, 0.20, 0.50),
-            bandwidth=0.01,
+            sparsity=(0.05, 0.05, 0.05, 0.05, 0.05),
+            bandwidth=0.1,
         ),
     ),
 )

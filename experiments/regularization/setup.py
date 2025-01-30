@@ -8,17 +8,18 @@ from config.sae.training import LossCoefficients
 
 class Experiment(Protocol):
     experiment_name: str
-    sae_variant: SAEVariant
     n_features: tuple[int, ...]
 
-    # Sweep parameters
-    num_sweep_steps: int
-
     # Regularization parameters
+    regularization_sae_variant: SAEVariant
     regularization_max_steps: int
     regularization_learning_rate: float
     regularization_min_lr: float
     regularization_loss_coefficients: LossCoefficients
+
+    # Sweep parameters
+    num_sweep_steps: int
+    sweep_sae_variant: SAEVariant
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients: tuple[float, ...]
@@ -26,8 +27,6 @@ class Experiment(Protocol):
 
     # Sweep range for SAE training on model using regularized weights
     sweep_regularized_starting_coefficients: tuple[float, ...]
-    sweep_regularized_ending_coefficients: tuple[float, ...]
-    sweep_regularized_ending_coefficients: tuple[float, ...]
     sweep_regularized_ending_coefficients: tuple[float, ...]
 
 
@@ -37,13 +36,10 @@ class RegularizeAllLayersExperiment(Experiment):
     """
 
     experiment_name = "all-layers"
-    sae_variant = SAEVariant.STANDARD
     n_features = tuple(64 * n for n in (8, 8, 32, 64, 64))
 
-    # Sweep parameters
-    num_sweep_steps = 8
-
     # Regularization parameters
+    regularization_sae_variant = SAEVariant.STANDARD
     regularization_max_steps = 15000
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
@@ -51,6 +47,10 @@ class RegularizeAllLayersExperiment(Experiment):
         sparsity=(0.020, 0.035, 0.085, 0.07, 0.075),  # Targets l0s ~ 10
         regularization=torch.tensor(3.0),
     )
+
+    # Sweep parameters
+    num_sweep_steps = 8
+    sweep_sae_variant = SAEVariant.STANDARD
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.0021, 0.0175, 0.056, 0.09, 0.275)
@@ -67,13 +67,10 @@ class GatedExperiment(Experiment):
     """
 
     experiment_name = "gated"
-    sae_variant = SAEVariant.GATED
     n_features = tuple(64 * n for n in (4, 32, 64, 64, 64))
 
-    # Sweep parameters
-    num_sweep_steps = 4
-
     # Regularization parameters
+    regularization_sae_variant = SAEVariant.GATED
     regularization_max_steps = 15000
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
@@ -81,6 +78,10 @@ class GatedExperiment(Experiment):
         sparsity=(0.1, 0.05, 0.1, 0.1, 0.1),  # Targets l0s ~ 10
         regularization=torch.tensor(2.0),
     )
+
+    # Sweep parameters
+    num_sweep_steps = 4
+    sweep_sae_variant = SAEVariant.GATED
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.01, 0.02, 0.05, 0.1, 0.2)
@@ -93,25 +94,26 @@ class GatedExperiment(Experiment):
 
 class JumpReLUExperiment(Experiment):
     """
-    Regularize using JumpReLU SAE.
+    Regularize using standard SAE and sweep using JumpReLU.
     """
 
-    experiment_name = "gated"
-    sae_variant = SAEVariant.GATED
+    experiment_name = "jumprelu"
     n_features = tuple(64 * n for n in (4, 32, 64, 64, 64))
 
-    # Sweep parameters
-    num_sweep_steps = 4
-
     # Regularization parameters
+    regularization_sae_variant = SAEVariant.STANDARD
     regularization_max_steps = 15000
     regularization_learning_rate = 1e-3
     regularization_min_lr = 1e-5
     regularization_loss_coefficients = LossCoefficients(
-        sparsity=(0.1, 0.05, 0.1, 0.1, 0.1),  # Targets l0s ~ 10
-        regularization=torch.tensor(2.0),
+        sparsity=(0.020, 0.035, 0.085, 0.07, 0.075),  # Targets l0s ~ 10
+        regularization=torch.tensor(3.0),
         bandwidth=0.01,
     )
+
+    # Sweep parameters
+    num_sweep_steps = 4
+    sweep_sae_variant = SAEVariant.JUMP_RELU
 
     # Sweep range for SAE training on model using normal weights
     sweep_normal_starting_coefficients = (0.01, 0.02, 0.05, 0.1, 0.2)

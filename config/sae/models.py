@@ -41,7 +41,7 @@ sae_options: dict[str, SAEConfig] = map_options(
         sae_variant=SAEVariant.STANDARD,
     ),
     SAEConfig(
-        name="jumprelu.shakespeare_64x4",
+        name="jumprelu-x8.shakespeare_64x4",
         gpt_config=gpt_options["ascii_64x4"],
         n_features=tuple(64 * n for n in (8, 8, 8, 8, 8)),
         sae_variant=SAEVariant.JUMP_RELU,
