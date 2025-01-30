@@ -1,17 +1,15 @@
 import json
 from collections import defaultdict
+from copy import copy
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import torch
 
 from config.gpt.models import GPTConfig, gpt_options
 from config.sae.models import SAEConfig
-from config.sae.training import (
-    LossCoefficients,
-    SAETrainingConfig,
-    shakespeare_64x4_defaults,
-)
+from config.sae.training import SAETrainingConfig, shakespeare_64x4_defaults
 from experiments import ParameterSweeper
 from experiments.regularization.setup import (  # noqa: F401
     Experiment,
@@ -23,13 +21,17 @@ from training.sae.concurrent import ConcurrentTrainer
 def create_config(
     setup: Experiment,
     name: str,
-    sparsity_coefficients: tuple[float, ...],
-    trainable_layers: tuple[int, ...] | None = None,
+    sparsity_coefficients: Optional[tuple[float, ...]] = None,
     device: torch.device | None = None,
 ) -> SAETrainingConfig:
     """
     Create configuration to be used for SAE training or GPT regularization.
     """
+    # Will we be overriding sparsity coefficients?
+    sparsity_coefficients = sparsity_coefficients or setup.regularization_loss_coefficients.sparsity
+    loss_coefficients = copy(setup.regularization_loss_coefficients)
+    loss_coefficients.sparsity = sparsity_coefficients
+
     config = SAETrainingConfig(
         name=name,
         sae_config=SAEConfig(
@@ -38,10 +40,7 @@ def create_config(
             sae_variant=setup.sae_variant,
         ),
         **shakespeare_64x4_defaults,
-        loss_coefficients=LossCoefficients(
-            sparsity=sparsity_coefficients,
-        ),
-        trainable_layers=trainable_layers,
+        loss_coefficients=loss_coefficients,
     )
 
     # Set optional args

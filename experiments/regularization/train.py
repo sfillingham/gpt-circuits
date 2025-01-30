@@ -15,7 +15,8 @@ from experiments.regularization import (
     sweep_training_parameters,
 )
 from experiments.regularization.setup import (  # noqa: F401
-    GatedSAEExperiment,
+    GatedExperiment,
+    JumpReLUExperiment,
     RegularizeAllLayersExperiment,
 )
 from training.gpt import GPTTrainer
@@ -41,7 +42,9 @@ if __name__ == "__main__":
         case "all-layers":
             setup = RegularizeAllLayersExperiment()
         case "gated":
-            setup = GatedSAEExperiment()
+            setup = GatedExperiment()
+        case "jumprelu":
+            setup = JumpReLUExperiment()
 
     base_dir = TrainingConfig.checkpoints_dir / "regularization"
 
@@ -71,17 +74,11 @@ if __name__ == "__main__":
             Train a GPT model using SAE regularization
             """
             # Load configuration
-            config = create_config(
-                setup=setup,
-                name=f"regularization/{setup.experiment_name}.model.regularized",
-                sparsity_coefficients=setup.regularization_sparsity_coefficients,
-                trainable_layers=setup.regularization_trainable_layers,
-            )
+            config = create_config(setup=setup, name=f"regularization/{setup.experiment_name}.model.regularized")
             # Set learning rate parameters
             config.max_steps = setup.regularization_max_steps
             config.learning_rate = setup.regularization_learning_rate
             config.min_lr = setup.regularization_min_lr
-            config.loss_coefficients.regularization = setup.regularization_coefficient
 
             # Initialize trainer
             trainer = RegularizationTrainer(config)
@@ -96,36 +93,32 @@ if __name__ == "__main__":
             Train SAE layers for a GPT model
             """
             # Sweep loss coefficients
-            for i in range(setup.num_sweeps):
-                print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
-                sweep_training_parameters(
-                    setup=setup,
-                    name_prefix="regularization/saes/normal",
-                    log_layers_to=base_dir / "saes.normal.csv",
-                    log_sums_to=base_dir / "sums.normal.csv",
-                    load_from=base_dir / "model.normal",
-                    starting_from=setup.sweep_normal_starting_coefficients,
-                    ending_with=setup.sweep_normal_ending_coefficients,
-                    steps=setup.num_sweep_steps,
-                )
+            sweep_training_parameters(
+                setup=setup,
+                name_prefix="regularization/saes/normal",
+                log_layers_to=base_dir / "saes.normal.csv",
+                log_sums_to=base_dir / "sums.normal.csv",
+                load_from=base_dir / "model.normal",
+                starting_from=setup.sweep_normal_starting_coefficients,
+                ending_with=setup.sweep_normal_ending_coefficients,
+                steps=setup.num_sweep_steps,
+            )
 
         case 3:
             """
             Train SAE layers for a GPT model created using SAE regularization
             """
             # Sweep loss coefficients
-            for i in range(setup.num_sweeps):
-                print(f"Starting parameter sweep {i+1}/{setup.num_sweeps}")
-                sweep_training_parameters(
-                    setup=setup,
-                    name_prefix="regularization/saes/regularized",
-                    log_layers_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
-                    log_sums_to=base_dir / f"{setup.experiment_name}.sums.regularized.csv",
-                    load_from=base_dir / f"{setup.experiment_name}.model.regularized",
-                    starting_from=setup.sweep_regularized_starting_coefficients,
-                    ending_with=setup.sweep_regularized_ending_coefficients,
-                    steps=setup.num_sweep_steps,
-                )
+            sweep_training_parameters(
+                setup=setup,
+                name_prefix="regularization/saes/regularized",
+                log_layers_to=base_dir / f"{setup.experiment_name}.saes.regularized.csv",
+                log_sums_to=base_dir / f"{setup.experiment_name}.sums.regularized.csv",
+                load_from=base_dir / f"{setup.experiment_name}.model.regularized",
+                starting_from=setup.sweep_regularized_starting_coefficients,
+                ending_with=setup.sweep_regularized_ending_coefficients,
+                steps=setup.num_sweep_steps,
+            )
 
         case 4:
             """

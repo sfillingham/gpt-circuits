@@ -98,8 +98,7 @@ class JumpReLUFunction(autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        x, threshold, bandwidth_tensor = ctx.saved_tensors
-        bandwidth = bandwidth_tensor.item()
+        x, threshold, bandwidth = ctx.saved_tensors
         x_grad = (x > threshold) * grad_output
         threshold_grad = (
             -(threshold / bandwidth) * JumpReLUFunction.rectangle((x - threshold) / bandwidth) * grad_output
@@ -119,8 +118,7 @@ class StepFunction(autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        x, threshold, bandwidth_tensor = ctx.saved_tensors
-        bandwidth = bandwidth_tensor.item()
+        x, threshold, bandwidth = ctx.saved_tensors
         x_grad = torch.zeros_like(grad_output)
         threshold_grad = -(1.0 / bandwidth) * StepFunction.rectangle((x - threshold) / bandwidth) * grad_output
         return x_grad, threshold_grad, None  # None for bandwidth
