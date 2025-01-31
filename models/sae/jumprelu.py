@@ -79,8 +79,8 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
 class JumpReLU(nn.Module):
     def __init__(self, feature_size, bandwidth):
         super(JumpReLU, self).__init__()
-        # NOTE: Training doesn't seem to converge unless starting with log_threshold == log(bandwidth).
-        self.log_threshold = nn.Parameter(torch.full((feature_size,), math.log(bandwidth)))
+        # NOTE: Training doesn't seem to converge unless starting with a default threshold ~ 0.1.
+        self.log_threshold = nn.Parameter(torch.full((feature_size,), math.log(0.1)))
         self.bandwidth = bandwidth
 
     def forward(self, x):

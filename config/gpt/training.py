@@ -21,10 +21,10 @@ options: dict[str, GPTTrainingConfig] = map_options(
         batch_size=128,
         gradient_accumulation_steps=1,
         learning_rate=1e-3,
-        warmup_steps=750,
-        max_steps=7500,
+        warmup_steps=1000,
+        max_steps=10000,
         decay_lr=True,
-        min_lr=1e-4,
+        min_lr=1e-5,
     ),
     GPTTrainingConfig(
         name="shakespeare_128x6",

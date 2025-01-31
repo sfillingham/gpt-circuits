@@ -77,10 +77,16 @@ options: dict[str, SAETrainingConfig] = map_options(
     ),
     SAETrainingConfig(
         name="e2e.jumprelu.shakespeare_64x4",
-        sae_config=sae_options["jumprelu-x8.shakespeare_64x4"],
-        **shakespeare_64x4_defaults,
+        sae_config=sae_options["jumprelu-x32.shakespeare_64x4"],
+        **(
+            shakespeare_64x4_defaults
+            | {
+                "max_steps": 10000,
+                "min_lr": 1e-5,
+            }
+        ),
         loss_coefficients=LossCoefficients(
-            sparsity=(0.1, 0.001, 0.01, 0.01, 0.008),
+            sparsity=(0.01, 0.0001, 0.005, 0.01, 0.005),
             downstream=1.0,
             bandwidth=0.1,
         ),
