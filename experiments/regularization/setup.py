@@ -86,7 +86,7 @@ class GatedExperiment(Experiment):
 
     # Sweep range for SAE training on model using regularized weights
     sweep_regularized_starting_coefficients = (0.002, 0.002, 0.005, 0.015, 0.02)
-    sweep_regularized_ending_coefficients = (0.04, 0.02, 0.04, 0.07, 0.08)
+    sweep_regularized_ending_coefficients = (0.04, 0.024, 0.04, 0.07, 0.08)
 
 
 class JumpReLUExperiment(Experiment):

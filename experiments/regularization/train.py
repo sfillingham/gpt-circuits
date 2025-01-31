@@ -74,11 +74,7 @@ if __name__ == "__main__":
             Train a GPT model using SAE regularization
             """
             # Load configuration
-            config = create_config(
-                setup=setup,
-                name=f"regularization/{setup.experiment_name}.model.regularized",
-                sae_variant=setup.regularization_sae_variant,
-            )
+            config = create_config(setup=setup, name=f"regularization/{setup.experiment_name}.model.regularized")
             # Set learning rate parameters
             config.max_steps = setup.regularization_max_steps
             config.learning_rate = setup.regularization_learning_rate
