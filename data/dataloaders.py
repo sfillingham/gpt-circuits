@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 
-class DataLoaderLite:
+class TrainingDataLoader:
     """
     Dataloader based on the one from nanoGPT. Each batch successively walks the shards in a dataset.
     """
@@ -107,3 +107,35 @@ class DataLoaderLite:
         npt = npt.astype(np.int32)
         ptt = torch.tensor(npt, dtype=torch.long)
         return ptt
+
+
+class ShardDataLoader:
+    """
+    Dataloader for extracting sequences from a specific shard.
+    """
+
+    def __init__(
+        self,
+        dir_path: str,
+        split: str,
+        shard_idx: int = 0,
+    ):
+        """
+        dir_path: Path to the directory containing the dataset shards.
+        split: Dataset split to use (e.g. "train", "val").
+        shard_idx: Index of the shard to load.
+        """
+        # Get the shard filenames
+        shard_paths = os.listdir(dir_path)
+        assert split in {"train", "val"}
+        shard_paths = [s for s in shard_paths if split in s]
+        shard_paths = sorted(shard_paths)
+        shard_paths = [os.path.join(dir_path, s) for s in shard_paths]
+        assert len(shard_paths) > 0, f"No shards found for split {split}"
+        assert 0 <= shard_idx < len(shard_paths), f"Shard index {shard_idx} out of bounds"
+        shard_path = shard_paths[shard_idx]
+
+        # Load shard data
+        npt = np.load(shard_path, allow_pickle=False)
+        npt = npt.astype(np.int32)
+        self.tokens = torch.tensor(npt, dtype=torch.long)

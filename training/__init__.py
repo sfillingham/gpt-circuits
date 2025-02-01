@@ -18,7 +18,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.optim import Optimizer
 
 from config import TrainingConfig
-from data.dataloaders import DataLoaderLite
+from data.dataloaders import TrainingDataLoader
 
 
 class Trainer:
@@ -34,8 +34,8 @@ class Trainer:
     device: torch.device
     model: nn.Module
     optimizer: Optimizer
-    train_dataloader: DataLoaderLite
-    val_dataloader: DataLoaderLite
+    train_dataloader: TrainingDataLoader
+    val_dataloader: TrainingDataLoader
     best_val_loss: torch.Tensor = torch.tensor(float("inf"))
 
     class LogDestination(str, Enum):
@@ -79,7 +79,7 @@ class Trainer:
         self.optimizer = self.configure_optimizer(self.unwrapped_model)
 
         # Create data loaders
-        self.train_dataloader = DataLoaderLite(
+        self.train_dataloader = TrainingDataLoader(
             dir_path=config.data_dir,
             B=config.batch_size,
             T=self.unwrapped_model.config.block_size,
@@ -87,7 +87,7 @@ class Trainer:
             num_processes=self.ddp_world_size,
             split="train",
         )
-        self.val_dataloader = DataLoaderLite(
+        self.val_dataloader = TrainingDataLoader(
             dir_path=config.data_dir,
             B=config.batch_size,
             T=self.unwrapped_model.config.block_size,

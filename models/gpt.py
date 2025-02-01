@@ -141,7 +141,7 @@ class GPT(nn.Module):
         """
         Forward pass of the model with patched activations.
 
-        :param x: Patched activations.
+        :param x: Patched activations. Shape: (B, T, n_embd)
         :param layer_idx: Layer index. 0 patches activations just before the first transformer block.
         """
         # forward through transformer blocks starting with the specified layer

@@ -12,6 +12,7 @@ class GPTConfig(Config):
     n_head: int = 0  # number of heads
     n_embd: int = 0  # embedding dimension
 
+    @property
     def tokenizer(self) -> Tokenizer:
         """
         Infer tokenizer from vocabulary size.
