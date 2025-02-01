@@ -21,19 +21,19 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
 
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
         super().__init__()
-        F = config.n_features[layer_idx]  # SAE dictionary size.
-        n_embd = config.gpt_config.n_embd  # GPT embedding size.
+        feature_size = config.n_features[layer_idx]  # SAE dictionary size.
+        embedding_size = config.gpt_config.n_embd  # GPT embedding size.
         bandwidth = loss_coefficients.bandwidth if loss_coefficients else None
         self.sparsity_coefficient = loss_coefficients.sparsity[layer_idx] if loss_coefficients else None
 
-        self.b_dec = nn.Parameter(torch.zeros(n_embd))
-        self.b_enc = nn.Parameter(torch.zeros(F))
+        self.b_dec = nn.Parameter(torch.zeros(embedding_size))
+        self.b_enc = nn.Parameter(torch.zeros(feature_size))
         # TODO: Do we need to unit normalize the columns of W_enc?
-        self.W_enc = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(n_embd, F)))
+        self.W_enc = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(embedding_size, feature_size)))
         self.W_dec = nn.Parameter(self.W_enc.mT.detach().clone())
 
         # NOTE: Bandwidth is used for calculating gradients and may be set to 0.0 during evaluation.
-        self.jumprelu = JumpReLU(feature_size=F, bandwidth=bandwidth or 0.0)
+        self.jumprelu = JumpReLU(feature_size=feature_size, bandwidth=bandwidth or 0.0)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """

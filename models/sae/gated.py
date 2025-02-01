@@ -18,18 +18,18 @@ class GatedSAE(nn.Module, SparseAutoencoder):
 
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
         super().__init__()
-        F = config.n_features[layer_idx]  # SAE dictionary size.
-        n_embd = config.gpt_config.n_embd  # GPT embedding size.
+        feature_size = config.n_features[layer_idx]  # SAE dictionary size.
+        embedding_size = config.gpt_config.n_embd  # GPT embedding size.
         self.l1_coefficient = loss_coefficients.sparsity[layer_idx] if loss_coefficients else None
-        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, n_embd)))
-        self.b_gate = nn.Parameter(torch.zeros(F))
-        self.b_mag = nn.Parameter(torch.zeros(F))
-        self.b_dec = nn.Parameter(torch.zeros(n_embd))
+        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(feature_size, embedding_size)))
+        self.b_gate = nn.Parameter(torch.zeros(feature_size))
+        self.b_mag = nn.Parameter(torch.zeros(feature_size))
+        self.b_dec = nn.Parameter(torch.zeros(embedding_size))
 
         try:
             # NOTE: Subclass might define these properties.
             self.W_gate = nn.Parameter(self.W_dec.mT.detach().clone())
-            self.r_mag = nn.Parameter(torch.zeros(F))
+            self.r_mag = nn.Parameter(torch.zeros(feature_size))
         except KeyError:
             pass
 
@@ -53,7 +53,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
         feature_magnitudes = f_gate * f_mag
         return feature_magnitudes, pi_gate
 
-    def decode(self, feature_magnitudes: torch.Tensor):
+    def decode(self, feature_magnitudes: torch.Tensor) -> torch.Tensor:
         """
         feature_magnitudes: SAE activations (batch_size, F)
         """

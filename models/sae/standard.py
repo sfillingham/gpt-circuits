@@ -16,17 +16,17 @@ class StandardSAE(nn.Module, SparseAutoencoder):
 
     def __init__(self, layer_idx: int, config: SAEConfig, loss_coefficients: Optional[LossCoefficients]):
         super().__init__()
-        F = config.n_features[layer_idx]  # SAE dictionary size.
-        n_embd = config.gpt_config.n_embd  # GPT embedding size.
+        feature_size = config.n_features[layer_idx]  # SAE dictionary size.
+        embedding_size = config.gpt_config.n_embd  # GPT embedding size.
         self.l1_coefficient = loss_coefficients.sparsity[layer_idx] if loss_coefficients else None
-        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(F, n_embd)))
+        self.W_dec = nn.Parameter(torch.nn.init.kaiming_uniform_(torch.empty(feature_size, embedding_size)))
 
-        self.b_enc = nn.Parameter(torch.zeros(F))
-        self.b_dec = nn.Parameter(torch.zeros(n_embd))
+        self.b_enc = nn.Parameter(torch.zeros(feature_size))
+        self.b_dec = nn.Parameter(torch.zeros(embedding_size))
 
         try:
             # NOTE: Subclass might define these properties.
-            self.W_enc = nn.Parameter(torch.empty(n_embd, F))
+            self.W_enc = nn.Parameter(torch.empty(embedding_size, feature_size))
             self.W_enc.data = self.W_dec.data.T.detach().clone()  # initialize W_enc from W_dec
         except KeyError:
             pass

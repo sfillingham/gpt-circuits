@@ -72,3 +72,10 @@ class SparseAutoencoder(Protocol):
         x: input tensor (batch_size, ...)
         """
         ...
+
+    def decode(self, feature_magnitudes: torch.Tensor) -> torch.Tensor:
+        """
+        :param feature_magnitudes: SAE activations (batch_size, feature_size)
+        :return: reconstructed activations (batch_size, embedding_size)
+        """
+        ...
