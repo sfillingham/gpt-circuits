@@ -84,11 +84,16 @@ class SAETrainer(Trainer):
         ).to(self.config.device)
 
         # Gather final metrics. We don't bother compiling because we're just running eval once.
-        final_metrics = self.val_step(0)  # step == 0 so that we don't save checkpoint weights.
+        final_metrics = self.val_step(0, should_log=False)  # step 0 so checkpoint isn't saved.
         self.checkpoint_l0s = final_metrics["l0s"]
         self.checkpoint_ce_loss = final_metrics["ce_loss"]
         self.checkpoint_ce_loss_increases = final_metrics["ce_loss_increases"]
         self.checkpoint_compound_ce_loss_increase = final_metrics["compound_ce_loss_increase"]
+
+        # Summarize results
+        print(f"Final L0s: {self.pretty_print(self.checkpoint_l0s)}")
+        print(f"Final CE loss increases: {self.pretty_print(self.checkpoint_ce_loss_increases)}")
+        print(f"Final compound CE loss increase: {self.pretty_print(self.checkpoint_compound_ce_loss_increase)}")
 
     def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
         """

@@ -189,7 +189,7 @@ class Trainer:
                 self.val_step(step)
 
     @torch.no_grad()
-    def val_step(self, step) -> dict[str, torch.Tensor]:
+    def val_step(self, step, should_log=True) -> dict[str, torch.Tensor]:
         """
         Perform one step of validation.
         """
@@ -226,17 +226,18 @@ class Trainer:
                 self.best_val_loss = best_val_loss
                 self.save_checkpoint(self.unwrapped_model, is_best)
 
-            # Log metrics
-            self.log(
-                {
-                    "type": "eval",
-                    "step": step,
-                    "loss": loss_accum,
-                    "checkpoint": is_best if step > 0 else False,
-                    **metrics_accum,
-                },
-                self.LogDestination.EVAL,
-            )
+            # Log metrics unless skipped
+            if should_log:
+                self.log(
+                    {
+                        "type": "eval",
+                        "step": step,
+                        "loss": loss_accum,
+                        "checkpoint": is_best if step > 0 else False,
+                        **metrics_accum,
+                    },
+                    self.LogDestination.EVAL,
+                )
 
         return metrics_accum
 

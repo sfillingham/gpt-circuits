@@ -86,7 +86,7 @@ options: dict[str, SAETrainingConfig] = map_options(
             }
         ),
         loss_coefficients=LossCoefficients(
-            sparsity=(0.01, 0.0001, 0.005, 0.01, 0.005),
+            sparsity=(0.01, 0.00001, 0.005, 0.01, 0.005),
             downstream=1.0,
             bandwidth=0.1,
         ),
