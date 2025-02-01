@@ -12,7 +12,6 @@ import torch
 from config import TrainingConfig
 from config.sae.training import SAETrainingConfig, options
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
-from training import Trainer
 from training.sae import SAETrainer
 
 
@@ -31,10 +30,6 @@ class ConcurrentTrainer(SAETrainer):
     """
     Train SAE weights for all layers concurrently.
     """
-
-    checkpoint_l0s: torch.Tensor
-    checkpoint_ce_loss_increases: torch.Tensor
-    checkpoint_compound_ce_loss_increase: torch.Tensor
 
     def __init__(self, config: SAETrainingConfig, load_from: str | Path):
         """
@@ -68,32 +63,13 @@ class ConcurrentTrainer(SAETrainer):
         """
         loss.sum().backward()
 
-    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor, metrics: dict[str, torch.Tensor]):
+    def save_checkpoint(self, model: SparsifiedGPT, is_best: torch.Tensor):
         """
-        Save SAE weights for layers that have achieved a better validation loss and update checkpoint metrics.
+        Save SAE weights for layers that have achieved a better validation loss.
         """
         # `is_best` contains a value for each layer indicating whether we have the best loss for that layer.
         layers_to_save = [layer_name for should_save, layer_name in zip(is_best, model.saes.keys()) if should_save]
         model.save(self.config.out_dir, layers_to_save)
-
-        # Update checkpoint metrics
-        self.checkpoint_l0s[is_best] = metrics["l0s"][is_best]
-        self.checkpoint_ce_loss_increases[is_best] = metrics["ce_loss_increases"][is_best]
-        self.checkpoint_compound_ce_loss_increase = metrics["compound_ce_loss_increase"]
-
-    def train(self):
-        """
-        Log checkpoint metrics once training is complete.
-        """
-        super().train()
-        self.log(
-            {
-                "checkpoint_l0s": self.checkpoint_l0s,
-                "checkpoint_ce_loss_increases": self.checkpoint_ce_loss_increases,
-                "checkpoint_compound_ce_loss_increase": self.checkpoint_compound_ce_loss_increase,
-            },
-            Trainer.LogDestination.DEBUG,
-        )
 
 
 if __name__ == "__main__":

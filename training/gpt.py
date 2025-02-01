@@ -108,3 +108,6 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = GPTTrainer(config)
     trainer.train()
+
+    # Pring final result
+    print(f"Best validation loss: {round(trainer.best_val_loss.item(), 4)}")

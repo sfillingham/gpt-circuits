@@ -16,6 +16,12 @@ class SAETrainer(Trainer):
 
     config: SAETrainingConfig
 
+    # Checkpoint metrics once training is complete
+    checkpoint_l0s: torch.Tensor
+    checkpoint_ce_loss: torch.Tensor
+    checkpoint_ce_loss_increases: torch.Tensor
+    checkpoint_compound_ce_loss_increase: torch.Tensor
+
     def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Calculate model loss.
@@ -61,6 +67,28 @@ class SAETrainer(Trainer):
         )
 
         return metrics
+
+    def train(self):
+        """
+        Reload model after done training and run eval one more time.
+        """
+        # Train weights.
+        super().train()
+
+        # Reload all checkpoint weights, which may include those that weren't trained.
+        self.model = SparsifiedGPT.load(
+            self.config.out_dir,
+            loss_coefficients=self.config.loss_coefficients,
+            trainable_layers=None,  # Load all layers
+            device=self.config.device,
+        ).to(self.config.device)
+
+        # Gather final metrics. We don't bother compiling because we're just running eval once.
+        final_metrics = self.val_step(0)  # step == 0 so that we don't save checkpoint weights.
+        self.checkpoint_l0s = final_metrics["l0s"]
+        self.checkpoint_ce_loss = final_metrics["ce_loss"]
+        self.checkpoint_ce_loss_increases = final_metrics["ce_loss_increases"]
+        self.checkpoint_compound_ce_loss_increase = final_metrics["compound_ce_loss_increase"]
 
     def configure_optimizer(self, model: SparsifiedGPT) -> Optimizer:
         """
