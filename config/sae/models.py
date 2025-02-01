@@ -49,7 +49,7 @@ sae_options: dict[str, SAEConfig] = map_options(
     SAEConfig(
         name="jumprelu-x16.shakespeare_64x4",
         gpt_config=gpt_options["ascii_64x4"],
-        # Only the penultimate layer needs the full x32 expansion factor
+        # Only the penultimate layer needs the full x16 expansion factor
         n_features=tuple(64 * n for n in (4, 4, 4, 16, 4)),
         sae_variant=SAEVariant.JUMP_RELU,
     ),
