@@ -37,7 +37,7 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x: GPT model activations (batch_size, n_embd)
+        x: GPT model activations (B, T, embedding size)
         """
         x_centered = x - self.b_dec
         pre_activations = torch.relu(x_centered @ self.W_enc + self.b_enc)
@@ -45,7 +45,7 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
 
     def decode(self, feature_magnitudes: torch.Tensor) -> torch.Tensor:
         """
-        feature_magnitudes: SAE activations (batch_size, F)
+        feature_magnitudes: SAE activations (B, T, feature size)
         """
         return feature_magnitudes @ self.W_dec + self.b_dec
 
@@ -54,7 +54,7 @@ class JumpReLUSAE(nn.Module, SparseAutoencoder):
         Returns a reconstruction of GPT model activations and feature magnitudes.
         Also return loss components if loss coefficients are provided.
 
-        x: GPT model activations (batch_size, n_embd)
+        x: GPT model activations (B, T, embedding size)
         """
         feature_magnitudes = self.encode(x)
         x_reconstructed = self.decode(feature_magnitudes)

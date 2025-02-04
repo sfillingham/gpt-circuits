@@ -29,6 +29,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+@torch.no_grad()
+def calculate_kl_divergence(
+    model: SparsifiedGPT,
+    target_logits: torch.Tensor,  # Shape: (T, V)
+    feature_magnitudes: torch.Tensor,  # Shape: (T, F)
+    layer_idx: int,
+) -> float:
+    """
+    Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
+    """
+    feature_magnitudes = feature_magnitudes.unsqueeze(0)  # Shape: (1, T, F)
+    x_reconstructed = model.saes[str(layer_idx)].decode(feature_magnitudes)  # type: ignore
+
+    predicted_logits = model.gpt.forward_with_patched_activations(x_reconstructed, layer_idx=layer_idx)
+    predicted_logits = predicted_logits.squeeze(0)  # Shape: (T, V)
+    kl_div = torch.nn.functional.kl_div(
+        torch.nn.functional.log_softmax(predicted_logits, dim=-1),
+        torch.nn.functional.softmax(target_logits, dim=-1),
+        reduction="batchmean",
+    )
+    return kl_div.item()
+
+
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
@@ -36,12 +59,12 @@ if __name__ == "__main__":
     # Load model
     defaults = Config()
     checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
-    model = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
+    model: SparsifiedGPT = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
     model.eval()
 
     # Compile if enabled
     if defaults.compile:
-        model = torch.compile(model)
+        model = torch.compile(model)  # type: ignore
 
     # Load tokens
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
@@ -52,18 +75,20 @@ if __name__ == "__main__":
     print(f'Using sequence: "{decoded_tokens.replace("\n", "\\n")}"')
 
     # Get target logits
-    output: SparsifiedGPTOutput = model(tokens.unsqueeze(0))
+    with torch.no_grad():
+        output: SparsifiedGPTOutput = model(tokens.unsqueeze(0))
     target_logits = output.logits.squeeze(0)
 
-    # Compute KL divergence if using all features
+    # Get output for layer
     layer_idx = args.layer_idx
-    x_reconstructed = output.reconstructed_activations[layer_idx]
-    predicted_logits = model.gpt.forward_with_patched_activations(x_reconstructed, layer_idx=layer_idx).squeeze(0)
-    kl_div = torch.nn.functional.kl_div(
-        torch.nn.functional.log_softmax(predicted_logits, dim=-1),
-        torch.nn.functional.softmax(target_logits, dim=-1),
-        reduction="batchmean",
-    )
-    print(f"KL divergence using all features for layer {layer_idx}: {round(kl_div.item(), 4)}")
+    feature_magnitudes = output.feature_magnitudes[layer_idx].squeeze(0)
+    x_reconstructed = output.reconstructed_activations[layer_idx].squeeze(0)
 
-    # TODO: Load feature metrics
+    # Compute KL divergence if using all features
+    kl_div = calculate_kl_divergence(model, target_logits, feature_magnitudes, layer_idx)
+    print(f"KL divergence using all features for layer {layer_idx}: {round(kl_div, 4)}")
+
+    # TODO: Find features needed to reconstruct logits
+    non_zero_indices = torch.nonzero(feature_magnitudes, as_tuple=True)
+    for token_idx, feature_idx in zip(*non_zero_indices):
+        pass

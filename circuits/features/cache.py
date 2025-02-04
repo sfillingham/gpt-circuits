@@ -53,6 +53,7 @@ class ModelCache:
         """
         return self.layers[layer_idx]
 
+    @torch.no_grad()
     def compute(self, model: SparsifiedGPT, shard: DatasetShard, batch_size: int):
         """
         Compute feature magnitudes to cache for a model.
@@ -61,6 +62,9 @@ class ModelCache:
         self.shard_idx = shard.shard_idx
         self.block_size = model.config.block_size
         self.num_layers = len(model.config.n_features)
+
+        # Set model to evaluation mode
+        model.eval()
 
         # Batched model outputs
         batch_feature_magnitudes: dict[int, list[sparse.csr_matrix]] = defaultdict(list)
@@ -79,8 +83,7 @@ class ModelCache:
             tokens = tokens.view(-1, self.block_size)
 
             # Get feature magnitudes
-            with torch.no_grad():
-                output: SparsifiedGPTOutput = model(tokens)
+            output: SparsifiedGPTOutput = model(tokens)
 
             for layer_idx, feature_magnitudes in output.feature_magnitudes.items():
                 # Remove batch dimension

@@ -29,7 +29,6 @@ def compute_metrics(
     # Load model
     defaults = Config()
     model: SparsifiedGPT = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
-    model.eval()
 
     # Compile if enabled
     if defaults.compile:

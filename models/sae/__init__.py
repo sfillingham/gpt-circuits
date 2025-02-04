@@ -69,13 +69,13 @@ class SparseAutoencoder(Protocol):
         """
         Forward pass of the encoder.
 
-        x: input tensor (batch_size, ...)
+        x: input tensor (B, T, embedding size)
         """
         ...
 
     def decode(self, feature_magnitudes: torch.Tensor) -> torch.Tensor:
         """
-        :param feature_magnitudes: SAE activations (batch_size, feature_size)
-        :return: reconstructed activations (batch_size, embedding_size)
+        :param feature_magnitudes: SAE activations (B, T, feature size)
+        :return: reconstructed activations (B, T, embedding size)
         """
         ...

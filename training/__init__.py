@@ -19,6 +19,8 @@ from torch.optim import Optimizer
 
 from config import TrainingConfig
 from data.dataloaders import TrainingDataLoader
+from models.gpt import GPT
+from models.sparsified import SparsifiedGPT
 
 
 class Trainer:
@@ -142,11 +144,11 @@ class Trainer:
         return self.config.eval_steps // self.ddp_world_size
 
     @property
-    def unwrapped_model(self) -> nn.Module:
+    def unwrapped_model(self) -> GPT | SparsifiedGPT:
         """
         Returns the original model before being wrapped using DDP.
         """
-        return self.model.module if self.ddp else self.model
+        return self.model.module if self.ddp else self.model  # type: ignore
 
     @property
     def autocast_device_type(self) -> str:

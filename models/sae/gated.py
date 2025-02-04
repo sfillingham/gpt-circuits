@@ -35,7 +35,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        x: GPT model activations (batch_size, n_embd)
+        x: GPT model activations (B, T, embedding size)
 
         Implementation adapted from: https://github.com/saprmarks/dictionary_learning/
         """
@@ -55,7 +55,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
 
     def decode(self, feature_magnitudes: torch.Tensor) -> torch.Tensor:
         """
-        feature_magnitudes: SAE activations (batch_size, F)
+        feature_magnitudes: SAE activations (B, T, feature size)
         """
         return feature_magnitudes @ self.W_dec + self.b_dec
 
@@ -64,7 +64,7 @@ class GatedSAE(nn.Module, SparseAutoencoder):
         Returns a reconstruction of GPT model activations and feature magnitudes.
         Also return loss components if loss coefficients are provided.
 
-        x: GPT model activations (batch_size, n_embd)
+        x: GPT model activations (B, T, embedding size)
         """
         feature_magnitudes, pi_gate = self.encode(x)
         x_reconstructed = self.decode(feature_magnitudes)
