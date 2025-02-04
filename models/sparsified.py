@@ -205,9 +205,9 @@ class SparsifiedGPT(nn.Module):
         SAE layer -> Targeted module for forward pre-hook.
         """
         if layer_idx < self.config.gpt_config.n_layer:
-            return self.gpt.transformer.h[layer_idx]
+            return self.gpt.transformer.h[layer_idx]  # type: ignore
         elif layer_idx == self.config.gpt_config.n_layer:
-            return self.gpt.transformer.ln_f
+            return self.gpt.transformer.ln_f  # type: ignore
         raise ValueError(f"Invalid layer index: {layer_idx}")
 
     @classmethod
@@ -231,7 +231,7 @@ class SparsifiedGPT(nn.Module):
 
         # Load SAE weights
         for layer_name, module in model.saes.items():
-            weights_path = os.path.join(dir, f"sae_{layer_name}.safetensors")
+            weights_path = os.path.join(dir, f"sae.{layer_name}.safetensors")
             load_model(module, weights_path, device=device.type)
 
         return model
@@ -265,7 +265,7 @@ class SparsifiedGPT(nn.Module):
         # Save SAE modules
         for layer_name, module in self.saes.items():
             if layer_name in layers_to_save:
-                weights_path = os.path.join(dir, f"sae_{layer_name}.safetensors")
+                weights_path = os.path.join(dir, f"sae.{layer_name}.safetensors")
                 save_model(module, weights_path)
 
     def get_sae_class(self, config: SAEConfig) -> type:

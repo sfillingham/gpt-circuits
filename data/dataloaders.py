@@ -1,4 +1,6 @@
 import os
+from functools import cached_property
+from typing import Optional
 
 import numpy as np
 import torch
@@ -109,9 +111,9 @@ class TrainingDataLoader:
         return ptt
 
 
-class ShardDataLoader:
+class DatasetShard:
     """
-    Dataloader for extracting sequences from a specific shard.
+    Tokens from a specific dataset shard.
     """
 
     def __init__(
@@ -119,6 +121,7 @@ class ShardDataLoader:
         dir_path: str,
         split: str,
         shard_idx: int = 0,
+        limit: Optional[int] = None,
     ):
         """
         dir_path: Path to the directory containing the dataset shards.
@@ -133,9 +136,18 @@ class ShardDataLoader:
         shard_paths = [os.path.join(dir_path, s) for s in shard_paths]
         assert len(shard_paths) > 0, f"No shards found for split {split}"
         assert 0 <= shard_idx < len(shard_paths), f"Shard index {shard_idx} out of bounds"
-        shard_path = shard_paths[shard_idx]
+        self.split = split
+        self.shard_idx = shard_idx
+        self.shard_path = shard_paths[shard_idx]
+        self.limit = limit
 
-        # Load shard data
-        npt = np.load(shard_path, allow_pickle=False)
+    @cached_property
+    def tokens(self) -> torch.Tensor:
+        """
+        Defer loading tokens until first access.
+        """
+        npt = np.load(self.shard_path, allow_pickle=False)
         npt = npt.astype(np.int32)
-        self.tokens = torch.tensor(npt, dtype=torch.long)
+        if self.limit is not None:
+            npt = npt[: self.limit]
+        return torch.tensor(npt, dtype=torch.long)

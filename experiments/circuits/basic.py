@@ -9,8 +9,9 @@ import argparse
 
 import torch
 
+from circuits.features import FeatureSet
 from config import Config, TrainingConfig
-from data.dataloaders import ShardDataLoader
+from data.dataloaders import DatasetShard
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
 
 
@@ -35,8 +36,8 @@ if __name__ == "__main__":
 
     # Load model
     defaults = Config()
-    checkpoint_path = TrainingConfig.checkpoints_dir / args.model
-    model = SparsifiedGPT.load(checkpoint_path, device=defaults.device).to(defaults.device)
+    checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
+    model = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
     model.eval()
 
     # Compile if enabled
@@ -44,7 +45,7 @@ if __name__ == "__main__":
         model = torch.compile(model)
 
     # Load tokens
-    shard = ShardDataLoader(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
+    shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
 
     # Get token sequence
     tokens = shard.tokens[args.token_idx : args.token_idx + model.config.block_size].to(defaults.device)
@@ -65,3 +66,6 @@ if __name__ == "__main__":
         reduction="batchmean",
     )
     print(f"KL divergence using all features for layer {layer_idx}: {round(kl_div.item(), 4)}")
+
+    # Load feature metrics
+    feature_set = FeatureSet(checkpoint_dir)
