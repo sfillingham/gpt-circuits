@@ -9,7 +9,6 @@ import argparse
 
 import torch
 
-from circuits.features import FeatureSet
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
@@ -67,5 +66,4 @@ if __name__ == "__main__":
     )
     print(f"KL divergence using all features for layer {layer_idx}: {round(kl_div.item(), 4)}")
 
-    # Load feature metrics
-    feature_set = FeatureSet(checkpoint_dir)
+    # TODO: Load feature metrics

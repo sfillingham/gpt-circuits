@@ -8,7 +8,7 @@ import argparse
 
 import torch
 
-from circuits.features import FeatureSet
+from circuits.features import compute_metrics
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from models.sparsified import SparsifiedGPT
@@ -46,4 +46,4 @@ if __name__ == "__main__":
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx, limit=int(args.limit))
 
     # Cache feature metrics
-    FeatureSet.cache_metrics(model, checkpoint_dir, shard, args.batch_size)
+    compute_metrics(model, checkpoint_dir, shard, args.batch_size)
