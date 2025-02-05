@@ -6,10 +6,10 @@ import torch
 from models.sparsified import SparsifiedGPT
 
 
-@dataclass
-class MaskedFeature:
+@dataclass(frozen=True)
+class Feature:
     """
-    Represents a masked feature at a specific location.
+    Represents a feature at a specific location.
     """
 
     token_idx: int
@@ -26,7 +26,7 @@ def calculate_kl_divergence(
     target_token_idx: int,
     target_logits: torch.Tensor,  # Shape: (V)
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-    masked_features: Sequence[MaskedFeature] = (),
+    masked_features: Sequence[Feature] = (),
 ) -> tuple[float, dict[str, float]]:
     """
     Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
@@ -71,3 +71,29 @@ def get_predictions(
     for i, p in zip(topk.indices, topk.values):
         results[model.gpt.config.tokenizer.decode_token(int(i.item()))] = round(p.item() * 100, 2)
     return results
+
+
+def estimate_ablation_effects(
+    model: SparsifiedGPT,
+    layer_idx: int,
+    target_token_idx: int,
+    target_logits: torch.Tensor,
+    feature_magnitudes: torch.Tensor,
+    circuit_features: list[Feature],
+    masked_features: list[Feature],
+) -> dict[Feature, float]:
+    """
+    Map features to KL divergence.
+    """
+    feature_to_kl_div: dict[Feature, float] = {}
+    for feature in circuit_features:
+        kl_div, _ = calculate_kl_divergence(
+            model,
+            layer_idx,
+            target_token_idx,
+            target_logits,
+            feature_magnitudes,
+            masked_features=masked_features + [feature],
+        )
+        feature_to_kl_div[feature] = kl_div
+    return feature_to_kl_div
