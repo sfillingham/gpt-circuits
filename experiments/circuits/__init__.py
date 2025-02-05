@@ -15,6 +15,9 @@ class MaskedFeature:
     token_idx: int
     feature_idx: int
 
+    def as_tuple(self) -> tuple[int, int]:
+        return self.token_idx, self.feature_idx
+
 
 @torch.no_grad()
 def calculate_kl_divergence(
