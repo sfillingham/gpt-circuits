@@ -1,14 +1,18 @@
+import json
 import random
+import re
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 
 from circuits.features.cache import LayerCache, ModelCache
+from data.dataloaders import DatasetShard
+from data.tokenizers import Tokenizer
 
 
 class ModelSampleSet:
@@ -35,6 +39,18 @@ class ModelSampleSet:
         """
         return self.layers[layer_idx]
 
+    def __iter__(self) -> Iterator["LayerSampleSet"]:
+        """
+        Return an iterator over the layer sample sets.
+        """
+        return iter(self.layers.values())
+
+    def __len__(self) -> int:
+        """
+        Return the number of layer sample sets.
+        """
+        return len(self.layers)
+
     def compute(self, model_cache: ModelCache):
         """
         Compute feature samples.
@@ -43,6 +59,17 @@ class ModelSampleSet:
             layer_sample_set = LayerSampleSet(layer_idx)
             layer_sample_set.compute(layer_cache, model_cache.block_size)
             self.layers[layer_idx] = layer_sample_set
+
+    def export(self, outdir: Path, shard: DatasetShard, tokenizer: Tokenizer):
+        """
+        Export feature samples to JSON
+        """
+        for layer_sample_set in self:
+            for feature_sample_set in tqdm(
+                layer_sample_set, desc=f"Exporting features from layer {layer_sample_set.layer_idx}"
+            ):
+                feature_outdir = outdir / f"{feature_sample_set.layer_idx}.{feature_sample_set.feature_idx}.json"
+                feature_sample_set.export(feature_outdir, shard, tokenizer)
 
     def save(self, checkpoint_dir: Path):
         """
@@ -72,8 +99,6 @@ class LayerSampleSet:
         """
         Create empty layer sample set.
         """
-        self.split = ""  # Dataset split
-        self.shard_idx = 0  # Shard index
         self.layer_idx = layer_idx
         self.sample_indices: dict[int, np.ndarray] = {}  # Indices with shape (num_samples,)
         self.sample_magnitudes: dict[int, sparse.csr_matrix] = {}  # Magnitudes with shape (num_samples, block_size)
@@ -85,6 +110,19 @@ class LayerSampleSet:
         sample_indices = self.sample_indices.get(feature_idx, np.array([]))
         sample_magnitudes = self.sample_magnitudes.get(feature_idx, sparse.csr_matrix((0, 0)))
         return FeatureSampleSet(self.layer_idx, feature_idx, sample_indices, sample_magnitudes)
+
+    def __iter__(self) -> Iterator["FeatureSampleSet"]:
+        """
+        Return an iterator over the feature sample sets.
+        """
+        for feature_idx in self.sample_indices.keys():
+            yield self[feature_idx]
+
+    def __len__(self) -> int:
+        """
+        Return the number of feature sample sets.
+        """
+        return len(self.sample_indices)
 
     def compute(self, layer_cache: LayerCache, block_size: int):
         """
@@ -134,27 +172,31 @@ class LayerSampleSet:
         """
         np.savez(
             checkpoint_dir / self.filename,
-            split=self.split,
-            shard_idx=self.shard_idx,
             **{f"{feature_idx}.indices": v for feature_idx, v in self.sample_indices.items()},  # type: ignore
-            **{f"{feature_idx}.magnitudes": v for feature_idx, v in self.sample_magnitudes.items()},  # type: ignore
+            **{f"{feature_idx}.magnitudes-data": v.data for feature_idx, v in self.sample_magnitudes.items()},
+            **{f"{feature_idx}.magnitudes-indices": v.indices for feature_idx, v in self.sample_magnitudes.items()},
+            **{f"{feature_idx}.magnitudes-indptr": v.indptr for feature_idx, v in self.sample_magnitudes.items()},
+            **{f"{feature_idx}.magnitudes-shape": v.shape for feature_idx, v in self.sample_magnitudes.items()},  # type: ignore
         )
 
     def load(self, checkpoint_dir: Path):
         """
         Load feature samples from disk.
         """
-        with np.load(checkpoint_dir / self.filename) as data:
+        with np.load(checkpoint_dir / self.filename, allow_pickle=True) as data:
             for key, value in data.items():
                 match key.split("."):
-                    case ["split"]:
-                        self.split = value
-                    case ["shard_idx"]:
-                        self.shard_idx = value
                     case [feature_idx, "indices"]:
                         self.sample_indices[int(feature_idx)] = value
-                    case [feature_idx, "magnitudes"]:
-                        self.sample_magnitudes[int(feature_idx)] = value
+                    case [feature_idx, "magnitudes-data"]:
+                        matrix_data = value
+                        matrix_indices = data[f"{feature_idx}.magnitudes-indices"]
+                        matrix_indptr = data[f"{feature_idx}.magnitudes-indptr"]
+                        shape = data[f"{feature_idx}.magnitudes-shape"]
+                        magnitudes = sparse.csr_matrix((matrix_data, matrix_indices, matrix_indptr), shape=shape)
+                        self.sample_magnitudes[int(feature_idx)] = magnitudes
+                    case _:
+                        pass
 
     @property
     def filename(self) -> str:
@@ -184,6 +226,38 @@ class FeatureSampleSet:
             FeatureSample(self.layer_idx, self.feature_idx, token_idx, self.sample_magnitudes[i])
             for i, token_idx in enumerate(self.sample_indices)
         ]
+
+    def export(self, outdir: Path, shard: DatasetShard, tokenizer: Tokenizer):
+        """
+        Export feature samples to JSON
+        """
+        data = {
+            "layer_idx": self.layer_idx,
+            "feature_idx": self.feature_idx,
+            "count": len(self.samples),
+            "samples": [],
+        }
+        for sample in self.samples:
+            block_size = sample.magnitudes.shape[-1]  # type: ignore
+            tokens = shard.tokens[sample.token_idx : sample.token_idx + block_size].tolist()
+            data["samples"].append(
+                {
+                    "token_idx": int(sample.token_idx),
+                    "text": tokenizer.decode_sequence(tokens),
+                    "tokens": tokens,
+                    "magnitude_idxs": sample.magnitudes.indices.tolist(),
+                    "magnitude_values": list(map(lambda x: round(x, 6), sample.magnitudes.data.tolist())),  # type: ignore
+                }
+            )
+        outdir.parent.mkdir(parents=True, exist_ok=True)
+        with open(outdir, "w") as f:
+            serialized_data = json.dumps(data, indent=2)
+
+            # Regex pattern to remove new lines between "[" and "]"
+            pattern = re.compile(r'\[\s*([^"]*?)\s*\]', re.DOTALL)
+            serialized_data = pattern.sub(lambda m: "[" + " ".join(m.group(1).split()) + "]", serialized_data)
+
+            f.write(serialized_data)
 
 
 @dataclass

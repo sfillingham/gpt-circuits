@@ -1,7 +1,7 @@
 """
 Cache feature metrics.
 
-$ python -m experiments.circuits.metrics
+$ python -m experiments.circuits.cache
 """
 
 import argparse
@@ -32,5 +32,5 @@ if __name__ == "__main__":
     # Load tokens
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx, limit=int(args.limit))
 
-    # Compute feature metrics
+    # Cache feature metrics
     compute_metrics(TrainingConfig.checkpoints_dir / args.model, shard, args.batch_size)

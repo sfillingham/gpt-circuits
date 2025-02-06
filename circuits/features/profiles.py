@@ -120,7 +120,7 @@ class LayerProfile:
             serialized_data = json.dumps(data, indent=2)
 
             # Regex pattern to remove new lines between "[" and "]"
-            pattern = re.compile(r"\[\s*(.*?)\s*\]", re.DOTALL)
+            pattern = re.compile(r'\[\s*([^"]*?)\s*\]', re.DOTALL)
             serialized_data = pattern.sub(lambda m: "[" + " ".join(m.group(1).split()) + "]", serialized_data)
 
             f.write(serialized_data)

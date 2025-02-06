@@ -2,9 +2,30 @@
 This module contains classes for tokenizing text.
 """
 
+from enum import Enum
 from typing import Protocol
 
 import tiktoken
+
+
+class TokenizerType(str, Enum):
+    """
+    Type of tokenizer.
+    """
+
+    TIKTOKEN = "tiktoken"
+    ASCII = "ascii"
+
+    def as_tokenizer(self) -> "Tokenizer":
+        """
+        Returns the tokenizer corresponding to this type.
+        """
+        if self == TokenizerType.TIKTOKEN:
+            return TikTokenTokenizer()
+        elif self == TokenizerType.ASCII:
+            return ASCIITokenizer()
+        else:
+            raise ValueError(f"Invalid tokenizer type: {self}")
 
 
 class Tokenizer(Protocol):

@@ -43,11 +43,11 @@ def calculate_kl_divergence(
     feature_magnitudes = feature_magnitudes.clone()
 
     # Estimate masked feature magnitudes
-    estimates = estimate_masked_feature_magnitudes(model_cache, feature_magnitudes, masked_features)
+    # estimates = estimate_masked_feature_magnitudes(model_cache, feature_magnitudes, masked_features)
 
     # Ablate masked features
     for masked_feature in masked_features:
-        feature_magnitudes[masked_feature.token_idx, masked_feature.feature_idx] = estimates[masked_feature]
+        feature_magnitudes[masked_feature.token_idx, masked_feature.feature_idx] = 0.0  # estimates[masked_feature]
 
     # Reconstruct activations and compute logits
     feature_magnitudes = feature_magnitudes.unsqueeze(0)  # Shape: (1, T, F)

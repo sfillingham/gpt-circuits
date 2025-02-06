@@ -14,11 +14,7 @@ from data.dataloaders import DatasetShard
 from models.sparsified import SparsifiedGPT
 
 
-def compute_metrics(
-    checkpoint_dir: Path,
-    shard: DatasetShard,
-    batch_size: int = 256,
-) -> None:
+def compute_metrics(checkpoint_dir: Path, shard: DatasetShard, batch_size: int = 256):
     """
     Compute and cache feature metrics for a given model and dataset.
 
