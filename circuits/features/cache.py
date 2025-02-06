@@ -146,7 +146,7 @@ class LayerCache:
         return self.magnitudes.tocsc()  # type: ignore
 
     @cached_property
-    def csr_matrix(self) -> sparse.csc_matrix:
+    def csr_matrix(self) -> sparse.csr_matrix:
         """
         Return the feature magnitudes in CSR format for faster row slicing.
         """

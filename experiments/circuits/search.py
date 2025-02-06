@@ -8,6 +8,7 @@ import argparse
 
 import torch
 
+from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
@@ -38,12 +39,18 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
+    threshold = args.threshold
+    layer_idx = args.layer_idx
+    target_token_idx = args.token_idx
 
     # Load model
     defaults = Config()
     checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
     model: SparsifiedGPT = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
     model.eval()
+
+    # Load cached feature magnitudes
+    model_cache = ModelCache(checkpoint_dir)
 
     # Compile if enabled
     if defaults.compile:
@@ -53,15 +60,13 @@ if __name__ == "__main__":
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
 
     # Get token sequence
-    layer_idx = args.layer_idx
-    target_token_idx = args.token_idx
     tokens = shard.tokens[args.sequence_idx : args.sequence_idx + model.config.block_size].to(defaults.device)
     decoded_tokens = model.gpt.config.tokenizer.decode_sequence(tokens.tolist())
     decoded_target = model.gpt.config.tokenizer.decode_token(int(tokens[target_token_idx].item()))
     print(f'Using sequence: "{decoded_tokens.replace("\n", "\\n")}"')
     print(f"Target token: `{decoded_target}` at index {args.token_idx}")
     print(f"Target layer: {layer_idx}")
-    print(f"Target threshold: {args.threshold}")
+    print(f"Target threshold: {threshold}")
 
     # Get target logits
     with torch.no_grad():
@@ -76,12 +81,13 @@ if __name__ == "__main__":
     # Get non-zero features that are before or at the target token
     non_zero_indices = torch.nonzero(feature_magnitudes, as_tuple=True)
     all_features: list[Feature] = [
-        Feature(t.item(), f.item()) for t, f in zip(*non_zero_indices) if t <= target_token_idx
+        Feature(layer_idx, t.item(), f.item()) for t, f in zip(*non_zero_indices) if t <= target_token_idx
     ]
 
     # Measure ablation effects
     feature_to_kl_div = estimate_ablation_effects(
         model,
+        model_cache,
         layer_idx,
         target_token_idx,
         target_logits,
@@ -113,6 +119,7 @@ if __name__ == "__main__":
         # Compute KL divergence
         circuit_kl_div, predictions = calculate_kl_divergence(
             model,
+            model_cache,
             layer_idx,
             target_token_idx,
             target_logits,
@@ -127,14 +134,16 @@ if __name__ == "__main__":
         )
 
         # Update search index
-        if circuit_kl_div < args.threshold:
+        if circuit_kl_div < threshold:
             # Update candidate features
-            discarded_features += circuit_features[search_target:]
+            discardable_features = circuit_features[search_target:]
+            discarded_features += discardable_features
             circuit_features = circuit_features[:search_target]
 
             # Sort features by KL divergence (descending)
             estimated_ablation_effects = estimate_ablation_effects(
                 model,
+                model_cache,
                 layer_idx,
                 target_token_idx,
                 target_logits,
@@ -158,6 +167,11 @@ if __name__ == "__main__":
         search_interval = search_interval_start + (search_interval_end - search_interval_start) * (
             search_step / (search_max_steps - 1)
         )
+
+        # Check for early stopping
+        if circuit_kl_div < threshold and min(estimated_ablation_effects.values()) > threshold:
+            print("Stopping early. Can't improve KL divergence.")
+            break
 
     # Check that all features are accounted for
     assert len(discarded_features) + len(circuit_features) == len(all_features)
