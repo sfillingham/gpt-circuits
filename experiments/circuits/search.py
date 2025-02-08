@@ -93,7 +93,6 @@ if __name__ == "__main__":
         target_logits,
         feature_magnitudes,
         circuit_features=all_features,
-        masked_features=[],
     )
 
     # Sort features by KL divergence (descending)
@@ -113,9 +112,6 @@ if __name__ == "__main__":
 
     # Start search
     while search_step < search_max_steps:
-        # Get features to ablate
-        masked_features = circuit_features[search_target:] + discarded_features
-
         # Compute KL divergence
         circuit_kl_div, predictions = calculate_kl_divergence(
             model,
@@ -124,7 +120,7 @@ if __name__ == "__main__":
             target_token_idx,
             target_logits,
             feature_magnitudes,
-            masked_features,
+            circuit_features[:search_target],
         )
 
         # Print results
@@ -149,7 +145,6 @@ if __name__ == "__main__":
                 target_logits,
                 feature_magnitudes,
                 circuit_features=circuit_features,
-                masked_features=discarded_features,
             )
             circuit_features.sort(key=lambda x: estimated_ablation_effects[x], reverse=True)
 

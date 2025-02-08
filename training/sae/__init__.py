@@ -15,6 +15,7 @@ class SAETrainer(Trainer):
     """
 
     config: SAETrainingConfig
+    model: SparsifiedGPT
 
     # Checkpoint metrics once training is complete
     checkpoint_l0s: torch.Tensor
