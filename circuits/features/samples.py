@@ -242,7 +242,7 @@ class FeatureSampleSet:
             tokens = shard.tokens[sample.token_idx : sample.token_idx + block_size].tolist()
             data["samples"].append(
                 {
-                    "token_idx": int(sample.token_idx),
+                    "sample_idx": int(sample.token_idx) // block_size,
                     "text": tokenizer.decode_sequence(tokens),
                     "tokens": tokens,
                     "magnitude_idxs": sample.magnitudes.indices.tolist(),
