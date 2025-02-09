@@ -157,6 +157,9 @@ if __name__ == "__main__":
         if circuit_kl_div < threshold and min(estimated_ablation_effects.values()) > threshold:
             print("Stopping early. Can't improve KL divergence.")
             break
+        if circuit_kl_div > threshold and len(circuit_features) == len(all_features):
+            print("Stopping early. Baseline KL divergence is too high.")
+            break
 
     # Check that all features are accounted for
     assert len(discarded_features) + len(circuit_features) == len(all_features)

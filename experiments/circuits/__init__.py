@@ -30,7 +30,7 @@ def calculate_kl_divergence(
         target_token_idx=target_token_idx,
         feature_magnitudes=feature_magnitudes,
         circuit_features=circuit_features,
-        num_samples=16,
+        num_samples=32,
     )
 
     # Reconstruct activations and compute logits

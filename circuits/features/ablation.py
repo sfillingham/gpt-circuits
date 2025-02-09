@@ -108,7 +108,7 @@ class ResampleAblator(Ablator):
         block_size = layer_cache.block_size
 
         # Get circuit features for this token
-        feature_idxs = np.array([f.feature_idx for f in token_features])
+        feature_idxs = np.array([f.feature_idx for f in token_features]).astype(np.int32)
         num_features = len(feature_idxs)
 
         if num_features == 0:
