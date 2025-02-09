@@ -8,11 +8,12 @@ import argparse
 
 import torch
 
+from circuits.features import Feature
+from circuits.features.ablation import ResampleAblator
 from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
-    Feature,
     calculate_kl_divergence,
     estimate_ablation_effects,
     get_predictions,
@@ -52,6 +53,9 @@ if __name__ == "__main__":
     # Load cached feature magnitudes
     model_cache = ModelCache(checkpoint_dir)
 
+    # Set feature ablation strategy
+    ablator = ResampleAblator(model_cache, k_nearest=128)
+
     # Compile if enabled
     if defaults.compile:
         model = torch.compile(model)  # type: ignore
@@ -84,23 +88,9 @@ if __name__ == "__main__":
         Feature(layer_idx, t.item(), f.item()) for t, f in zip(*non_zero_indices) if t <= target_token_idx
     ]
 
-    # Measure ablation effects
-    feature_to_kl_div = estimate_ablation_effects(
-        model,
-        model_cache,
-        layer_idx,
-        target_token_idx,
-        target_logits,
-        feature_magnitudes,
-        circuit_features=all_features,
-    )
-
-    # Sort features by KL divergence (descending)
-    all_features.sort(key=lambda x: feature_to_kl_div[x], reverse=True)
-
     # Starting search states
     # NOTE: Configured to remove one feature at a time
-    search_target = len(all_features)
+    search_target = len(all_features)  # Start with all features
     search_interval_start: float = 1.0
     search_interval_end: float = 1.0
     search_max_steps = len(all_features)
@@ -115,7 +105,7 @@ if __name__ == "__main__":
         # Compute KL divergence
         circuit_kl_div, predictions = calculate_kl_divergence(
             model,
-            model_cache,
+            ablator,
             layer_idx,
             target_token_idx,
             target_logits,
@@ -139,7 +129,7 @@ if __name__ == "__main__":
             # Sort features by KL divergence (descending)
             estimated_ablation_effects = estimate_ablation_effects(
                 model,
-                model_cache,
+                ablator,
                 layer_idx,
                 target_token_idx,
                 target_logits,
