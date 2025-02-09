@@ -43,7 +43,7 @@ class ModelCache:
 
             # Load layers
             for layer_idx in range(self.num_layers):
-                layer_cache = LayerCache(layer_idx)
+                layer_cache = LayerCache(layer_idx, self.block_size)
                 layer_cache.load(checkpoint_dir)
                 self.layers[layer_idx] = layer_cache
 
@@ -96,7 +96,7 @@ class ModelCache:
         for layer_idx, stackable_magnitudes in batch_feature_magnitudes.items():
             # Stack token magnitudes
             coo_feature_magnitudes: sparse.coo_matrix = sparse.vstack(stackable_magnitudes, format="coo")  # type: ignore
-            layer_cache = LayerCache(layer_idx)
+            layer_cache = LayerCache(layer_idx, self.block_size)
             layer_cache.update(coo_feature_magnitudes)
             self.layers[layer_idx] = layer_cache
 
@@ -131,11 +131,12 @@ class LayerCache:
     Contains cached feature magnitudes for a layer.
     """
 
-    def __init__(self, layer_idx: int):
+    def __init__(self, layer_idx: int, block_size):
         """
         Create empty layer magnitudes cache.
         """
         self.layer_idx = layer_idx
+        self.block_size = block_size  # Block size used to compute feature magnitudes
         self.magnitudes: sparse.coo_matrix = sparse.coo_matrix((0, 0))  # Shape: (num_tokens, num_features)
 
     @cached_property
