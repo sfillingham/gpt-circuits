@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from circuits.features import Feature
-from circuits.features.cache import LayerCache, ModelCache
+from circuits.features.cache import ModelCache
 
 
 class Ablator(Protocol):
@@ -40,6 +40,9 @@ class ResampleAblator(Ablator):
     Ablation using resampling. Based on technique described here:
     https://www.lesswrong.com/posts/JvZhhzycHu2Yd57RN
     """
+
+    CacheKey = tuple[int, int, tuple[int, ...], tuple[float, ...]]  # Key type for caching nearest neighbors
+    nearest_neighbors_cache: dict[CacheKey, np.ndarray] = {}  # Map of cached nearest neighbors
 
     def __init__(self, model_cache: ModelCache, k_nearest: int = 128):
         """
@@ -143,13 +146,19 @@ class ResampleAblator(Ablator):
         block_size = layer_cache.block_size
         num_features = len(circuit_feature_idxs)
 
+        # Check if nearest neighbors are cached
+        # TODO: Consider purging unused cache entries
+        circuit_feature_magnitudes = feature_magnitudes[circuit_feature_idxs]
+        cache_key = self.get_cache_key(layer_idx, token_idx, circuit_feature_idxs, circuit_feature_magnitudes)
+        if cache_key in self.nearest_neighbors_cache:
+            return self.nearest_neighbors_cache[cache_key]
+
         if num_features == 0:
             # No features to use for sampling
             top_feature_idxs = np.array([])
         else:
             # Get top features by magnitude
             num_top_features = max(0, min(3, num_features))  # Limit to 3 features
-            circuit_feature_magnitudes = feature_magnitudes[circuit_feature_idxs]
             # TODO: Consider selecting top features using normalized magnitude
             select_indices = np.argsort(circuit_feature_magnitudes)[-num_top_features:]
             top_feature_idxs = circuit_feature_idxs[select_indices]
@@ -180,7 +189,28 @@ class ResampleAblator(Ablator):
         num_neighbors = min(self.k_nearest, len(row_idxs))
         # TODO: Consider removing first exact match to avoid duplicating original values
         nearest_neighbor_idxs = row_idxs[np.argsort(mse)[:num_neighbors]]
+
+        # Cache nearest neighbors
+        if cache_key not in self.nearest_neighbors_cache:
+            self.nearest_neighbors_cache[cache_key] = nearest_neighbor_idxs
         return nearest_neighbor_idxs
+
+    def get_cache_key(
+        self,
+        layer_idx: int,
+        token_idx: int,
+        circuit_feature_idxs: np.ndarray,
+        circuit_feature_magnitudes: np.ndarray,
+    ) -> CacheKey:
+        """
+        Get cache key for nearest neighbors.
+        """
+        return (
+            layer_idx,
+            token_idx,
+            tuple([int(f) for f in circuit_feature_idxs]),
+            tuple([float(f) for f in circuit_feature_magnitudes]),
+        )
 
 
 class ZeroAblator(Ablator):
