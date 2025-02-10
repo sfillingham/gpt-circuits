@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Protocol
 
 import numpy as np
@@ -69,22 +68,15 @@ class ResampleAblator(Ablator):
         samples = torch.zeros(samples_shape, device=feature_magnitudes.device)
 
         # Ignore tokens after the target token because they'll be ignored.
-        with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(
-                    self.patch_token_magnitudes,
-                    layer_idx,
-                    token_idx,
-                    feature_magnitudes[token_idx].cpu().numpy(),  # Shape: (F)
-                    {f for f in circuit_features if f.token_idx == token_idx},
-                    num_samples,
-                )
-                for token_idx in range(target_token_idx + 1)
-            ]
-
-            for future in as_completed(futures):
-                token_idx, token_samples = future.result()  # Shape: (B, F)
-                samples[:, token_idx, :] = token_samples
+        for token_idx in range(target_token_idx + 1):
+            token_idx, token_samples = self.patch_token_magnitudes(
+                layer_idx,
+                token_idx,
+                feature_magnitudes[token_idx].cpu().numpy(),  # Shape: (F)
+                {f for f in circuit_features if f.token_idx == token_idx},
+                num_samples,
+            )
+            samples[:, token_idx, :] = token_samples
 
         return samples
 

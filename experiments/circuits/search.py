@@ -14,7 +14,7 @@ from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
-    calculate_kl_divergences,
+    analyze_circuits,
     estimate_ablation_effects,
     get_predictions,
 )
@@ -64,9 +64,10 @@ if __name__ == "__main__":
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
 
     # Get token sequence
+    tokenizer = model.gpt.config.tokenizer
     tokens = shard.tokens[args.sequence_idx : args.sequence_idx + model.config.block_size].to(defaults.device)
-    decoded_tokens = model.gpt.config.tokenizer.decode_sequence(tokens.tolist())
-    decoded_target = model.gpt.config.tokenizer.decode_token(int(tokens[target_token_idx].item()))
+    decoded_tokens = tokenizer.decode_sequence(tokens.tolist())
+    decoded_target = tokenizer.decode_token(int(tokens[target_token_idx].item()))
     print(f'Using sequence: "{decoded_tokens.replace("\n", "\\n")}"')
     print(f"Target token: `{decoded_target}` at index {args.token_idx}")
     print(f"Target layer: {layer_idx}")
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         output: SparsifiedGPTOutput = model(tokens.unsqueeze(0))
     target_logits = output.logits.squeeze(0)[target_token_idx]  # Shape: (V)
-    target_predictions = get_predictions(model, target_logits)
+    target_predictions = get_predictions(tokenizer, target_logits)
     print(f"Target predictions: {target_predictions}\n")
 
     # Get output for layer
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     while search_step < search_max_steps:
         # Compute KL divergence
         circuit_variant = frozenset(circuit_features[:search_target])
-        kld_result = calculate_kl_divergences(
+        circuit_analysis = analyze_circuits(
             model,
             ablator,
             layer_idx,
@@ -113,13 +114,13 @@ if __name__ == "__main__":
             feature_magnitudes,
             [circuit_variant],
         )[circuit_variant]
-        circuit_kl_div = kld_result.kl_divergence
+        circuit_kl_div = circuit_analysis.kl_divergence
 
         # Print results
         print(
             f"Search: {search_target}/{len(all_features)} ({search_interval:.2f}) - "
             f"Circuit KL div: {round(circuit_kl_div, 4)} - "
-            f"Predictions: {kld_result.predictions}"
+            f"Predictions: {circuit_analysis.predictions}"
         )
 
         # Update search index
