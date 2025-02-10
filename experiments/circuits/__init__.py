@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Sequence
 
 import torch
@@ -8,56 +9,70 @@ from circuits.features.ablation import Ablator
 from models.sparsified import SparsifiedGPT
 
 
+@dataclass(frozen=True)
+class KLDResult:
+    kl_divergence: float
+    predictions: dict[str, float]
+
+
 @torch.no_grad()
-def calculate_kl_divergence(
+def calculate_kl_divergences(
     model: SparsifiedGPT,
     ablator: Ablator,
     layer_idx: int,
     target_token_idx: int,
     target_logits: torch.Tensor,  # Shape: (V)
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-    circuit_features: Sequence[Feature] = (),
-) -> tuple[float, dict[str, float]]:
+    circuit_variants: Sequence[frozenset[Feature]] = (),
+) -> dict[frozenset[Feature], KLDResult]:
     """
     Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
     """
-    # Copy feature magnitudes to avoid modifying original
-    feature_magnitudes = feature_magnitudes.clone()
+    # For storing results
+    results: dict[frozenset[Feature], KLDResult] = {}
 
-    # Patch feature magnitudes
-    patched_feature_magnitudes = ablator.patch(
-        layer_idx=layer_idx,
-        target_token_idx=target_token_idx,
-        feature_magnitudes=feature_magnitudes,
-        circuit_features=circuit_features,
-        num_samples=32,
-    )
+    # Use progress bar if multiple variants
+    if len(circuit_variants) > 1:
+        circuit_variants = tqdm(circuit_variants, desc="Calculating KL divergences")  # type: ignore
 
-    # Reconstruct activations and compute logits
-    x_reconstructed = model.saes[str(layer_idx)].decode(patched_feature_magnitudes)  # type: ignore
-    predicted_logits = model.gpt.forward_with_patched_activations(
-        x_reconstructed, layer_idx=layer_idx
-    )  # Shape: (B, T, V)
+    for circuit_variant in circuit_variants:
+        # Patch feature magnitudes
+        patched_feature_magnitudes = ablator.patch(
+            layer_idx=layer_idx,
+            target_token_idx=target_token_idx,
+            feature_magnitudes=feature_magnitudes,
+            circuit_features=circuit_variant,
+            num_samples=32,
+        )
 
-    # We only care about logits for the target token
-    predicted_logits = predicted_logits[:, target_token_idx, :]  # Shape: (B, V)
+        # Reconstruct activations and compute logits
+        x_reconstructed = model.saes[str(layer_idx)].decode(patched_feature_magnitudes)  # type: ignore
+        predicted_logits = model.gpt.forward_with_patched_activations(
+            x_reconstructed, layer_idx=layer_idx
+        )  # Shape: (B, T, V)
 
-    # Convert logits to probabilities before averaging across samples
-    predicted_probabilities = torch.nn.functional.softmax(predicted_logits, dim=-1)
-    predicted_probabilities = predicted_probabilities.mean(dim=0)  # Shape: (V)
-    predicted_logits = torch.log(predicted_probabilities)  # Shape: (V)
+        # We only care about logits for the target token
+        predicted_logits = predicted_logits[:, target_token_idx, :]  # Shape: (B, V)
 
-    # Compute KL divergence
-    kl_div = torch.nn.functional.kl_div(
-        torch.nn.functional.log_softmax(predicted_logits, dim=-1),
-        torch.nn.functional.softmax(target_logits, dim=-1),
-        reduction="sum",
-    )
+        # Convert logits to probabilities before averaging across samples
+        predicted_probabilities = torch.nn.functional.softmax(predicted_logits, dim=-1)
+        predicted_probabilities = predicted_probabilities.mean(dim=0)  # Shape: (V)
+        predicted_logits = torch.log(predicted_probabilities)  # Shape: (V)
 
-    # Calculate predictions
-    predictions = get_predictions(model, predicted_logits)
+        # Compute KL divergence
+        kl_div = torch.nn.functional.kl_div(
+            torch.nn.functional.log_softmax(predicted_logits, dim=-1),
+            torch.nn.functional.softmax(target_logits, dim=-1),
+            reduction="sum",
+        )
 
-    return kl_div.item(), predictions
+        # Calculate predictions
+        predictions = get_predictions(model, predicted_logits)
+
+        # Store results
+        results[circuit_variant] = KLDResult(kl_divergence=kl_div.item(), predictions=predictions)
+
+    return results
 
 
 def get_predictions(
@@ -89,16 +104,23 @@ def estimate_ablation_effects(
     Map features to KL divergence.
     """
     feature_to_kl_div: dict[Feature, float] = {}
-    for feature in tqdm(circuit_features, desc="Estimating ablation effects"):
-        patched_features = [f for f in circuit_features if f != feature]
-        kl_div, _ = calculate_kl_divergence(
-            model,
-            ablator,
-            layer_idx,
-            target_token_idx,
-            target_logits,
-            feature_magnitudes,
-            circuit_features=patched_features,
-        )
-        feature_to_kl_div[feature] = kl_div
+
+    # Generate all variations with one feature removed
+    circuit_variants: dict[Feature, frozenset[Feature]] = {}
+    for feature in circuit_features:
+        circuit_variants[feature] = frozenset([f for f in circuit_features if f != feature])
+
+    # Calculate KL divergence for each variant
+    kld_results = calculate_kl_divergences(
+        model,
+        ablator,
+        layer_idx,
+        target_token_idx,
+        target_logits,
+        feature_magnitudes,
+        [variant for variant in circuit_variants.values()],
+    )
+
+    # Map features to KL divergence
+    feature_to_kl_div = {feature: kld_results[circuit_variants[feature]].kl_divergence for feature in circuit_features}
     return feature_to_kl_div

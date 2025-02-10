@@ -14,7 +14,7 @@ from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
-    calculate_kl_divergence,
+    calculate_kl_divergences,
     estimate_ablation_effects,
     get_predictions,
 )
@@ -103,20 +103,23 @@ if __name__ == "__main__":
     # Start search
     while search_step < search_max_steps:
         # Compute KL divergence
-        circuit_kl_div, predictions = calculate_kl_divergence(
+        circuit_variant = frozenset(circuit_features[:search_target])
+        kld_result = calculate_kl_divergences(
             model,
             ablator,
             layer_idx,
             target_token_idx,
             target_logits,
             feature_magnitudes,
-            circuit_features[:search_target],
-        )
+            [circuit_variant],
+        )[circuit_variant]
+        circuit_kl_div = kld_result.kl_divergence
 
         # Print results
         print(
-            f"Search: {search_target}/{len(all_features)} ({search_interval:.2f}) - Circuit KL div: {round(circuit_kl_div, 4)} - "
-            f"Predictions: {predictions}"
+            f"Search: {search_target}/{len(all_features)} ({search_interval:.2f}) - "
+            f"Circuit KL div: {round(circuit_kl_div, 4)} - "
+            f"Predictions: {kld_result.predictions}"
         )
 
         # Update search index

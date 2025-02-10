@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Protocol, Sequence
+from typing import Protocol
 
 import numpy as np
 import torch
@@ -18,7 +18,7 @@ class Ablator(Protocol):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,
-        circuit_features: Sequence[Feature],
+        circuit_features: frozenset[Feature],
         num_samples: int,
     ) -> torch.Tensor:
         """
@@ -57,7 +57,7 @@ class ResampleAblator(Ablator):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-        circuit_features: Sequence[Feature],
+        circuit_features: frozenset[Feature],
         num_samples: int,
     ) -> torch.Tensor:  # Shape: (B, T, F)
         """
@@ -223,7 +223,7 @@ class ZeroAblator(Ablator):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,
-        circuit_features: Sequence[Feature],
+        circuit_features: frozenset[Feature],
         num_samples: int,
     ) -> torch.Tensor:
         """
