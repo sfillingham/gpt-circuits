@@ -68,7 +68,7 @@ class ModelSampleSet:
             for feature_sample_set in tqdm(
                 layer_sample_set, desc=f"Exporting features from layer {layer_sample_set.layer_idx}"
             ):
-                feature_outdir = outdir / f"{feature_sample_set.layer_idx}.{feature_sample_set.feature_idx}.json"
+                feature_outdir = outdir / f"{feature_sample_set.layer_idx}/{feature_sample_set.feature_idx}.json"
                 feature_sample_set.export(feature_outdir, shard, tokenizer)
 
     def save(self, checkpoint_dir: Path):
@@ -130,8 +130,8 @@ class LayerSampleSet:
         """
         num_features = layer_cache.csc_matrix.shape[-1]  # type: ignore
         for feature_idx in range(num_features):
-            # List of token indices to use for the feature sample
-            token_idxs: list[int]
+            # List of shard token indices to use for the feature sample
+            sample_token_idxs: list[int]
 
             # Are there enough samples to use percentile thresholding?
             sparse_feature_magnitudes = layer_cache.csc_matrix[:, feature_idx]
@@ -141,16 +141,16 @@ class LayerSampleSet:
             if use_topk:
                 topk = min(non_zero_magnitudes.size, self.SUGGESTED_SAMPLE_COUNT)
                 top_rows = sorted(zip(non_zero_rows, non_zero_magnitudes), key=lambda x: -x[1])[:topk]
-                token_idxs = [int(idx) for idx, _ in top_rows]
+                sample_token_idxs = [int(idx) for idx, _ in top_rows]
             else:
-                token_idxs = []
+                sample_token_idxs = []
                 threshold = np.percentile(non_zero_magnitudes, self.SAMPLES_PERCENTILE)
                 top_rows = [(idx, m) for (idx, m) in zip(non_zero_rows, non_zero_magnitudes) if m >= threshold]
                 select_rows = sorted(random.sample(top_rows, self.SUGGESTED_SAMPLE_COUNT), key=lambda x: -x[1])
-                token_idxs = [int(idx) for idx, _ in select_rows]
+                sample_token_idxs = [int(idx) for idx, _ in select_rows]
 
             # Convert token indices to sample index ranges
-            sample_starting_idxs = [idx - idx % block_size for idx in token_idxs]
+            sample_starting_idxs = [idx - idx % block_size for idx in sample_token_idxs]
             sample_ending_idxs = [idx + block_size for idx in sample_starting_idxs]
 
             # Collect magnitudes for each sample
@@ -163,7 +163,7 @@ class LayerSampleSet:
             # Store samples
             if len(sample_feature_magnitudes) > 0:
                 sample_feature_magnitudes = sparse.csr_matrix(np.vstack(sample_feature_magnitudes))
-                self.sample_indices[feature_idx] = np.array(sample_starting_idxs)
+                self.sample_indices[feature_idx] = np.array(sample_token_idxs)
                 self.sample_magnitudes[feature_idx] = sample_feature_magnitudes
 
     def save(self, checkpoint_dir: Path):
@@ -214,7 +214,7 @@ class FeatureSampleSet:
 
     layer_idx: int
     feature_idx: int
-    sample_indices: np.ndarray  # Shape: (num_samples,)
+    sample_indices: np.ndarray  # One shard token index for each sample. Shape: (num_samples,)
     sample_magnitudes: sparse.csr_matrix  # Shape: (num_samples, block_size)
 
     @cached_property
@@ -222,10 +222,14 @@ class FeatureSampleSet:
         """
         Return a list of feature samples.
         """
-        return [
-            FeatureSample(self.layer_idx, self.feature_idx, token_idx, self.sample_magnitudes[i])
-            for i, token_idx in enumerate(self.sample_indices)
-        ]
+        feature_samples = []
+        block_size: int = self.sample_magnitudes.shape[-1]  # type: ignore
+        for i, shard_token_idx in enumerate(self.sample_indices):
+            sample_idx = shard_token_idx // block_size
+            token_idx = shard_token_idx % block_size
+            sample = FeatureSample(self.layer_idx, self.feature_idx, sample_idx, token_idx, self.sample_magnitudes[i])
+            feature_samples.append(sample)
+        return feature_samples
 
     def export(self, outdir: Path, shard: DatasetShard, tokenizer: Tokenizer):
         """
@@ -239,10 +243,12 @@ class FeatureSampleSet:
         }
         for sample in self.samples:
             block_size = sample.magnitudes.shape[-1]  # type: ignore
-            tokens = shard.tokens[sample.token_idx : sample.token_idx + block_size].tolist()
+            starting_idx = sample.sample_idx * block_size
+            tokens = shard.tokens[starting_idx : starting_idx + block_size].tolist()
             data["samples"].append(
                 {
-                    "sample_idx": int(sample.token_idx) // block_size,
+                    "sample_idx": int(sample.sample_idx),
+                    "token_idx": int(sample.token_idx),
                     "text": tokenizer.decode_sequence(tokens),
                     "tokens": tokens,
                     "magnitude_idxs": sample.magnitudes.indices.tolist(),
@@ -268,5 +274,6 @@ class FeatureSample:
 
     layer_idx: int
     feature_idx: int
-    token_idx: int
+    sample_idx: int  # Shard token idx // block_size
+    token_idx: int  # Shard token idx % block_size
     magnitudes: sparse.csr_matrix  # Shape: (1, block_size)
