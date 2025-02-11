@@ -9,7 +9,7 @@ import argparse
 import torch
 
 from circuits.features import Feature
-from circuits.features.ablation import ResampleAblator
+from circuits.features.ablation import ResampleAblator, ZeroAblator
 from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
@@ -55,9 +55,15 @@ if __name__ == "__main__":
     model_cache = ModelCache(checkpoint_dir)
 
     # Set feature ablation strategy
+    # ablator = ZeroAblator()
     k_nearest = 64  # How many nearest neighbors to consider in resampling
     num_samples = 64  # Number of samples to use for estimating KL divergence
-    ablator = ResampleAblator(model_cache, k_nearest=k_nearest)
+    positional_coefficient = 1.0  # How important is the position of a feature
+    ablator = ResampleAblator(
+        model_cache,
+        k_nearest=k_nearest,
+        positional_coefficient=positional_coefficient,
+    )
 
     # Compile if enabled
     if defaults.compile:

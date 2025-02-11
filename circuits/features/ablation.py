@@ -43,13 +43,15 @@ class ResampleAblator(Ablator):
     CacheKey = tuple[int, int, tuple[int, ...], tuple[float, ...]]  # Key type for caching nearest neighbors
     nearest_neighbors_cache: dict[CacheKey, np.ndarray] = {}  # Map of cached nearest neighbors
 
-    def __init__(self, model_cache: ModelCache, k_nearest):
+    def __init__(self, model_cache: ModelCache, k_nearest: int | None, positional_coefficient: float = 1.0):
         """
         :param model_cache: Model cache to use for resampling.
-        :param k_nearest: Max number of nearest neighbors to use for creating sample distributions.
+        :param k_nearest: Number of nearest neighbors to use for creating sample distributions. If `None`, use all.
+        :param positional_coefficient: Coefficient for positional distance in MSE.
         """
         self.model_cache = model_cache
         self.k_nearest = k_nearest
+        self.positional_coefficient = positional_coefficient
 
     def patch(
         self,
@@ -99,13 +101,27 @@ class ResampleAblator(Ablator):
 
         :return: Patched feature magnitudes. Shape: (B, F)
         """
+        layer_cache = self.model_cache[layer_idx]
         circuit_feature_idxs = np.array([f.feature_idx for f in token_features]).astype(np.int32)
-        nearest_neighbor_idxs = self.get_nearest_neighbors(
-            layer_idx,
-            token_idx,
-            token_feature_magnitudes,
-            circuit_feature_idxs,
-        )
+
+        if self.k_nearest is not None:
+            # Get nearest neighbors using MSE
+            nearest_neighbor_idxs = self.get_nearest_neighbors(
+                layer_idx,
+                token_idx,
+                token_feature_magnitudes,
+                circuit_feature_idxs,
+            )
+        else:
+            # Randomly sample from the layer cache
+            num_shard_tokens: int = layer_cache.magnitudes.shape[0]  # type: ignore
+            sequence_idxs = np.random.choice(
+                range(num_shard_tokens // layer_cache.block_size),
+                size=num_samples,
+                replace=False,
+            )
+            # Respect token position when choosing indices
+            nearest_neighbor_idxs = sequence_idxs * layer_cache.block_size + token_idx
 
         # Randomly draw indices from top candidates to include in samples
         sample_size = min(len(nearest_neighbor_idxs), num_samples)
@@ -115,7 +131,7 @@ class ResampleAblator(Ablator):
             num_duplicates = num_samples - len(sample_idxs)
             extra_sample_idxs = np.random.choice(sample_idxs, size=num_duplicates, replace=True)
             sample_idxs = np.concatenate((sample_idxs, extra_sample_idxs))
-        token_samples = self.model_cache[layer_idx].csr_matrix[sample_idxs, :].toarray()  # Shape: (B, F)
+        token_samples = layer_cache.csr_matrix[sample_idxs, :].toarray()  # Shape: (B, F)
 
         # Preserve circuit feature magnitudes
         token_samples[:, circuit_feature_idxs] = token_feature_magnitudes[circuit_feature_idxs]
@@ -140,6 +156,7 @@ class ResampleAblator(Ablator):
 
         :return: Indices of nearest neighbors.
         """
+        assert self.k_nearest is not None
         layer_cache = self.model_cache[layer_idx]
         block_size = layer_cache.block_size
         num_features = len(circuit_feature_idxs)
@@ -176,6 +193,7 @@ class ResampleAblator(Ablator):
         # Add column for token positional distance
         positional_distances = np.abs((row_idxs % block_size) - token_idx).astype(np.float32)
         positional_distances = positional_distances / block_size  # Scale to [0, 1]
+        positional_distances = positional_distances * self.positional_coefficient  # Scale by coefficient
         candidate_samples = np.column_stack((candidate_samples, positional_distances))
 
         # Calculate MSE
