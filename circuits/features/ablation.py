@@ -5,6 +5,7 @@ import torch
 
 from circuits.features import Feature
 from circuits.features.cache import ModelCache
+from circuits.features.profiles import ModelProfile
 
 
 class Ablator(Protocol):
@@ -43,12 +44,19 @@ class ResampleAblator(Ablator):
     CacheKey = tuple[int, int, tuple[int, ...], tuple[float, ...]]  # Key type for caching nearest neighbors
     nearest_neighbors_cache: dict[CacheKey, np.ndarray] = {}  # Map of cached nearest neighbors
 
-    def __init__(self, model_cache: ModelCache, k_nearest: int | None, positional_coefficient: float = 1.0):
+    def __init__(
+        self,
+        model_profile: ModelProfile,
+        model_cache: ModelCache,
+        k_nearest: int | None,
+        positional_coefficient: float = 1.0,
+    ):
         """
         :param model_cache: Model cache to use for resampling.
         :param k_nearest: Number of nearest neighbors to use for creating sample distributions. If `None`, use all.
         :param positional_coefficient: Coefficient for positional distance in MSE.
         """
+        self.model_profile = model_profile
         self.model_cache = model_cache
         self.k_nearest = k_nearest
         self.positional_coefficient = positional_coefficient
@@ -157,6 +165,7 @@ class ResampleAblator(Ablator):
         :return: Indices of nearest neighbors.
         """
         assert self.k_nearest is not None
+        layer_profile = self.model_profile[layer_idx]
         layer_cache = self.model_cache[layer_idx]
         block_size = layer_cache.block_size
         num_features = len(circuit_feature_idxs)
@@ -189,17 +198,24 @@ class ResampleAblator(Ablator):
 
         # Create matrix of token magnitudes to sample from
         candidate_samples = layer_cache.csc_matrix[:, circuit_feature_idxs][row_idxs, :].toarray()
+        target_values = feature_magnitudes[circuit_feature_idxs]
 
-        # Add column for token positional distance
+        # Calculate normalization coefficients
+        norm_coefficients = np.ones_like(target_values)
+        for i, feature_idx in enumerate(circuit_feature_idxs):
+            feature_profile = layer_profile[int(feature_idx)]
+            norm_coefficients[i] = 1.0 / feature_profile.max
+
+        # Add positional information
         positional_distances = np.abs((row_idxs % block_size) - token_idx).astype(np.float32)
         positional_distances = positional_distances / block_size  # Scale to [0, 1]
-        positional_distances = positional_distances * self.positional_coefficient  # Scale by coefficient
-        candidate_samples = np.column_stack((candidate_samples, positional_distances))
+        candidate_samples = np.column_stack((candidate_samples, positional_distances))  # Add column
+        target_values = np.append(target_values, 0)  # Add target
+        norm_coefficients = np.append(norm_coefficients, self.positional_coefficient)  # Add coefficient
 
         # Calculate MSE
-        target_values = feature_magnitudes[circuit_feature_idxs]
-        target_values = np.append(target_values, 0)  # Append positional distance of 0
-        mse = np.mean((candidate_samples - target_values) ** 2, axis=-1)
+        errors = (candidate_samples - target_values) * norm_coefficients
+        mse = np.mean(errors**2, axis=-1)
 
         # Get nearest neighbors
         num_neighbors = min(self.k_nearest, len(row_idxs))

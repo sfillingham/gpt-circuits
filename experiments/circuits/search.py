@@ -11,6 +11,7 @@ import torch
 from circuits.features import Feature
 from circuits.features.ablation import ResampleAblator, ZeroAblator  # noqa: F401
 from circuits.features.cache import ModelCache
+from circuits.features.profiles import ModelProfile
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
@@ -51,15 +52,17 @@ if __name__ == "__main__":
     model: SparsifiedGPT = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
     model.eval()
 
-    # Load cached feature magnitudes
+    # Load cached metrics and feature magnitudes
+    model_profile = ModelProfile(checkpoint_dir)
     model_cache = ModelCache(checkpoint_dir)
 
     # Set feature ablation strategy
     # ablator = ZeroAblator()
-    k_nearest = 64  # How many nearest neighbors to consider in resampling
-    num_samples = 64  # Number of samples to use for estimating KL divergence
-    positional_coefficient = 1.0  # How important is the position of a feature
+    k_nearest = 128  # How many nearest neighbors to consider in resampling
+    num_samples = 128  # Number of samples to use for estimating KL divergence
+    positional_coefficient = 2.0  # How important is the position of a feature
     ablator = ResampleAblator(
+        model_profile,
         model_cache,
         k_nearest=k_nearest,
         positional_coefficient=positional_coefficient,

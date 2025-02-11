@@ -131,7 +131,7 @@ class LayerProfile:
         """
         with open(checkpoint_dir / self.filename, "r") as f:
             features_data = json.load(f)
-            self.features = {k: FeatureProfile(**v) for k, v in features_data.items()}
+            self.features = {int(k): FeatureProfile(**v) for k, v in features_data.items()}
 
     @property
     def filename(self) -> str:
