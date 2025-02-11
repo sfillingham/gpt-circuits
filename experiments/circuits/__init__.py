@@ -25,7 +25,7 @@ def analyze_circuits(
     target_token_idx: int,
     target_logits: torch.Tensor,  # Shape: (V)
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-    circuit_variants: Sequence[frozenset[Feature]] = (),
+    circuit_variants: Sequence[frozenset[Feature]],
 ) -> dict[frozenset[Feature], CircuitResult]:
     """
     Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
@@ -161,20 +161,18 @@ def get_predictions(
     return results
 
 
-def estimate_ablation_effects(
+def estimate_feature_ablation_effects(
     model: SparsifiedGPT,
     ablator: Ablator,
     layer_idx: int,
     target_token_idx: int,
     target_logits: torch.Tensor,
     feature_magnitudes: torch.Tensor,
-    circuit_features: list[Feature],
+    circuit_features: set[Feature],
 ) -> dict[Feature, float]:
     """
     Map features to KL divergence.
     """
-    feature_to_kl_div: dict[Feature, float] = {}
-
     # Generate all variations with one feature removed
     circuit_variants: dict[Feature, frozenset[Feature]] = {}
     for feature in circuit_features:
@@ -192,5 +190,38 @@ def estimate_ablation_effects(
     )
 
     # Map features to KL divergence
-    feature_to_kl_div = {feature: kld_results[circuit_variants[feature]].kl_divergence for feature in circuit_features}
-    return feature_to_kl_div
+    return {feature: kld_results[variant].kl_divergence for feature, variant in circuit_variants.items()}
+
+
+def estimate_token_ablation_effects(
+    model: SparsifiedGPT,
+    ablator: Ablator,
+    layer_idx: int,
+    target_token_idx: int,
+    target_logits: torch.Tensor,
+    feature_magnitudes: torch.Tensor,
+    circuit_features: set[Feature],
+) -> dict[int, float]:
+    """
+    Map features to KL divergence.
+    """
+    # Generate all variations with one token removed
+    circuit_variants: dict[int, frozenset[Feature]] = {}
+    unique_token_indices = {f.token_idx for f in circuit_features}
+    for token_idx in unique_token_indices:
+        circuit_variant = frozenset([f for f in circuit_features if f.token_idx != token_idx])
+        circuit_variants[token_idx] = circuit_variant
+
+    # Calculate KL divergence for each variant
+    kld_results = analyze_circuits(
+        model,
+        ablator,
+        layer_idx,
+        target_token_idx,
+        target_logits,
+        feature_magnitudes,
+        [variant for variant in circuit_variants.values()],
+    )
+
+    # Map token indices to KL divergence
+    return {token_idx: kld_results[variant].kl_divergence for token_idx, variant in circuit_variants.items()}

@@ -1,7 +1,7 @@
 """
 Find all features needed to reconstruct the output logits of a model to within a certain KL divergence threshold.
 
-$ python -m experiments.circuits.search --sequence_idx=0 --token_idx=51 --layer_idx=0 --threshold=0.1
+$ python -m experiments.circuits.search --sequence_idx=0 --token_idx=51 --layer_idx=0
 """
 
 import argparse
@@ -15,7 +15,8 @@ from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
 from experiments.circuits import (
     analyze_circuits,
-    estimate_ablation_effects,
+    estimate_feature_ablation_effects,
+    estimate_token_ablation_effects,
     get_predictions,
 )
 from models.sparsified import SparsifiedGPT, SparsifiedGPTOutput
@@ -33,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", type=str, default="train", help="Dataset split to use")
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--layer_idx", type=int, default=0, help="SAE layer to analyze")
-    parser.add_argument("--threshold", type=float, default=0.1, help="Max threshold for KL divergence")
+    parser.add_argument("--threshold", type=float, default=0.15, help="Max threshold for KL divergence")
     return parser.parse_args()
 
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     model_cache = ModelCache(checkpoint_dir)
 
     # Set feature ablation strategy
-    ablator = ResampleAblator(model_cache, k_nearest=128)
+    ablator = ResampleAblator(model_cache, k_nearest=64)
 
     # Compile if enabled
     if defaults.compile:
@@ -78,33 +79,49 @@ if __name__ == "__main__":
         output: SparsifiedGPTOutput = model(tokens.unsqueeze(0))
     target_logits = output.logits.squeeze(0)[target_token_idx]  # Shape: (V)
     target_predictions = get_predictions(tokenizer, target_logits)
-    print(f"Target predictions: {target_predictions}\n")
+    print(f"Target predictions: {target_predictions}")
+
+    # Get baseline KL divergence
+    x_reconstructed = model.saes[str(layer_idx)].decode(output.feature_magnitudes[layer_idx])  # type: ignore
+    predicted_logits = model.gpt.forward_with_patched_activations(x_reconstructed, layer_idx=layer_idx)
+    predicted_logits = predicted_logits[0, target_token_idx, :]  # Shape: (V)
+    baseline_predictions = get_predictions(tokenizer, predicted_logits)
+    baseline_kl_div = torch.nn.functional.kl_div(
+        torch.nn.functional.log_softmax(target_logits, dim=-1),
+        torch.nn.functional.softmax(predicted_logits, dim=-1),
+        reduction="sum",
+    )
+    print(f"Baseline predictions: {baseline_predictions}")
+    print(f"Baseline KL divergence: {baseline_kl_div.item():.4f}\n")
 
     # Get output for layer
     feature_magnitudes = output.feature_magnitudes[layer_idx].squeeze(0)  # Shape: (T, F)
 
     # Get non-zero features that are before or at the target token
     non_zero_indices = torch.nonzero(feature_magnitudes, as_tuple=True)
-    all_features: list[Feature] = [
+    all_features: set[Feature] = {
         Feature(layer_idx, t.item(), f.item()) for t, f in zip(*non_zero_indices) if t <= target_token_idx
-    ]
+    }
+
+    # Circuit to start pruning
+    circuit_features: set[Feature] = all_features
+
+    ### Part 1: Start by searching for important tokens
+    print("Starting search for important tokens...")
+
+    # Group features by token index
+    features_by_token_idx: dict[int, set[Feature]] = {}
+    for token_idx in range(target_token_idx + 1):
+        features_by_token_idx[token_idx] = set({f for f in all_features if f.token_idx == token_idx})
 
     # Starting search states
-    # NOTE: Configured to remove one feature at a time
-    search_target = len(all_features)  # Start with all features
-    search_interval_start: float = 1.0
-    search_interval_end: float = 1.0
-    search_max_steps = len(all_features)
+    discard_candidates: set[Feature] = set({})
     circuit_kl_div: float = float("inf")
-    circuit_features: list[Feature] = all_features[:]
-    discarded_features: list[Feature] = []
-    search_interval: float = search_interval_start
-    search_step = 0
 
     # Start search
-    while search_step < search_max_steps:
+    for search_step in range(target_token_idx + 1):
         # Compute KL divergence
-        circuit_variant = frozenset(circuit_features[:search_target])
+        circuit_candidate = frozenset(circuit_features - discard_candidates)
         circuit_analysis = analyze_circuits(
             model,
             ablator,
@@ -112,26 +129,25 @@ if __name__ == "__main__":
             target_token_idx,
             target_logits,
             feature_magnitudes,
-            [circuit_variant],
-        )[circuit_variant]
+            [circuit_candidate],
+        )[circuit_candidate]
         circuit_kl_div = circuit_analysis.kl_divergence
+        num_unique_tokens = len(set(f.token_idx for f in circuit_candidate))
 
         # Print results
         print(
-            f"Search: {search_target}/{len(all_features)} ({search_interval:.2f}) - "
-            f"Circuit KL div: {round(circuit_kl_div, 4)} - "
+            f"Tokens: {num_unique_tokens}/{target_token_idx + 1} - "
+            f"KL Div: {circuit_kl_div:.4f} - "
             f"Predictions: {circuit_analysis.predictions}"
         )
 
-        # Update search index
+        # If below threshold, continue search
         if circuit_kl_div < threshold:
             # Update candidate features
-            discardable_features = circuit_features[search_target:]
-            discarded_features += discardable_features
-            circuit_features = circuit_features[:search_target]
+            circuit_features = set(circuit_candidate)
 
             # Sort features by KL divergence (descending)
-            estimated_ablation_effects = estimate_ablation_effects(
+            estimated_token_ablation_effects = estimate_token_ablation_effects(
                 model,
                 ablator,
                 layer_idx,
@@ -140,36 +156,88 @@ if __name__ == "__main__":
                 feature_magnitudes,
                 circuit_features=circuit_features,
             )
-            circuit_features.sort(key=lambda x: estimated_ablation_effects[x], reverse=True)
+            least_important_token_idx = min(estimated_token_ablation_effects.items(), key=lambda x: x[1])[0]
+            least_important_token_kl_div = estimated_token_ablation_effects[least_important_token_idx]
+            discard_candidates = features_by_token_idx[least_important_token_idx]
 
-            # Include fewer features
-            search_target -= round(search_interval)
+            # Check for early stopping
+            if least_important_token_kl_div > threshold:
+                print("Stopping early. Can't improve KL divergence.")
+                break
+
+        # If above threshold, stop search
         else:
-            # Include more features
-            search_target += round(search_interval)
+            print("Stopping early. KL divergence is too high.")
+            break
 
-        # Clamp search index
-        search_target = min(max(search_target, 0), len(circuit_features))
+    # Print results (grouped by token_idx)
+    print(f"\nCircuit after token search ({len(circuit_features)}):")
+    for token_idx in range(max([f.token_idx for f in circuit_features]) + 1):
+        features = [f for f in circuit_features if f.token_idx == token_idx]
+        if len(features) > 0:
+            print(f"Token {token_idx}: {', '.join([str(f.feature_idx) for f in features])}")
+    print("")
 
-        # Update search interval
-        search_step += 1
-        search_interval = search_interval_start + (search_interval_end - search_interval_start) * (
-            search_step / (search_max_steps - 1)
+    ### Part 2: Search for important features
+    print("Starting search for important features...")
+
+    # Starting search states
+    discard_candidates: set[Feature] = set({})
+    circuit_kl_div: float = float("inf")
+
+    # # Start search
+    for search_step in range(len(circuit_features)):
+        # Compute KL divergence
+        circuit_candidate = frozenset(circuit_features - discard_candidates)
+        circuit_analysis = analyze_circuits(
+            model,
+            ablator,
+            layer_idx,
+            target_token_idx,
+            target_logits,
+            feature_magnitudes,
+            [circuit_candidate],
+        )[circuit_candidate]
+        circuit_kl_div = circuit_analysis.kl_divergence
+
+        # Print results
+        print(
+            f"Features: {len(circuit_candidate)}/{len(all_features)} - "
+            f"KL Div: {circuit_kl_div:.4f} - "
+            f"Predictions: {circuit_analysis.predictions}"
         )
 
-        # Check for early stopping
-        if circuit_kl_div < threshold and min(estimated_ablation_effects.values()) > threshold:
-            print("Stopping early. Can't improve KL divergence.")
-            break
-        if circuit_kl_div > threshold and len(circuit_features) == len(all_features):
-            print("Stopping early. Baseline KL divergence is too high.")
-            break
+        # If below threshold, continue search
+        if circuit_kl_div < threshold:
+            # Update candidate features
+            circuit_features = set(circuit_candidate)
 
-    # Check that all features are accounted for
-    assert len(discarded_features) + len(circuit_features) == len(all_features)
+            # Sort features by KL divergence (descending)
+            estimated_feature_ablation_effects = estimate_feature_ablation_effects(
+                model,
+                ablator,
+                layer_idx,
+                target_token_idx,
+                target_logits,
+                feature_magnitudes,
+                circuit_features=circuit_features,
+            )
+            least_important_feature = min(estimated_feature_ablation_effects.items(), key=lambda x: x[1])[0]
+            least_important_feature_kl_div = estimated_feature_ablation_effects[least_important_feature]
+            discard_candidates = {least_important_feature}
+
+            # Check for early stopping
+            if least_important_feature_kl_div > threshold:
+                print("Stopping early. Can't improve KL divergence.")
+                break
+
+        # If above threshold, stop search
+        else:
+            print("Stopping early. KL divergence is too high.")
+            break
 
     # Print final results (grouped by token_idx)
-    print(f"\nCircuit features ({len(circuit_features)}):")
+    print(f"\nCircuit after feature search ({len(circuit_features)}):")
     for token_idx in range(max([f.token_idx for f in circuit_features]) + 1):
         features = [f for f in circuit_features if f.token_idx == token_idx]
         if len(features) > 0:

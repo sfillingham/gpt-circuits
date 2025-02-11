@@ -150,7 +150,7 @@ class ResampleAblator(Ablator):
             top_feature_idxs = np.array([])
         else:
             # Get top features by magnitude
-            num_top_features = max(0, min(3, num_features))  # Limit to 3 features
+            num_top_features = max(0, min(16, num_features))  # Limit to 16 features
             # TODO: Consider selecting top features using normalized magnitude
             select_indices = np.argsort(circuit_feature_magnitudes)[-num_top_features:]
             top_feature_idxs = circuit_feature_idxs[select_indices]
