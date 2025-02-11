@@ -9,7 +9,7 @@ import argparse
 import torch
 
 from circuits.features import Feature
-from circuits.features.ablation import ResampleAblator, ZeroAblator
+from circuits.features.ablation import ResampleAblator, ZeroAblator  # noqa: F401
 from circuits.features.cache import ModelCache
 from config import Config, TrainingConfig
 from data.dataloaders import DatasetShard
