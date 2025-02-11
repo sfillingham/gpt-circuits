@@ -55,7 +55,9 @@ if __name__ == "__main__":
     model_cache = ModelCache(checkpoint_dir)
 
     # Set feature ablation strategy
-    ablator = ResampleAblator(model_cache, k_nearest=64)
+    k_nearest = 64  # How many nearest neighbors to consider in resampling
+    num_samples = 64  # Number of samples to use for estimating KL divergence
+    ablator = ResampleAblator(model_cache, k_nearest=k_nearest)
 
     # Compile if enabled
     if defaults.compile:
@@ -130,6 +132,7 @@ if __name__ == "__main__":
             target_logits,
             feature_magnitudes,
             [circuit_candidate],
+            num_samples=num_samples,
         )[circuit_candidate]
         circuit_kl_div = circuit_analysis.kl_divergence
         num_unique_tokens = len(set(f.token_idx for f in circuit_candidate))
@@ -155,6 +158,7 @@ if __name__ == "__main__":
                 target_logits,
                 feature_magnitudes,
                 circuit_features=circuit_features,
+                num_samples=num_samples,
             )
             least_important_token_idx = min(estimated_token_ablation_effects.items(), key=lambda x: x[1])[0]
             least_important_token_kl_div = estimated_token_ablation_effects[least_important_token_idx]
@@ -197,6 +201,7 @@ if __name__ == "__main__":
             target_logits,
             feature_magnitudes,
             [circuit_candidate],
+            num_samples=num_samples,
         )[circuit_candidate]
         circuit_kl_div = circuit_analysis.kl_divergence
 
@@ -221,6 +226,7 @@ if __name__ == "__main__":
                 target_logits,
                 feature_magnitudes,
                 circuit_features=circuit_features,
+                num_samples=num_samples,
             )
             least_important_feature = min(estimated_feature_ablation_effects.items(), key=lambda x: x[1])[0]
             least_important_feature_kl_div = estimated_feature_ablation_effects[least_important_feature]

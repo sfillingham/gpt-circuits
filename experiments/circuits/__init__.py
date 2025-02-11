@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import torch
-from tqdm import tqdm
 
 from circuits.features import Feature
 from circuits.features.ablation import Ablator
@@ -26,6 +25,7 @@ def analyze_circuits(
     target_logits: torch.Tensor,  # Shape: (V)
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
     circuit_variants: Sequence[frozenset[Feature]],
+    num_samples: int,
 ) -> dict[frozenset[Feature], CircuitResult]:
     """
     Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
@@ -40,7 +40,7 @@ def analyze_circuits(
         target_token_idx,
         feature_magnitudes,
         circuit_variants,
-        num_samples=32,
+        num_samples=num_samples,
     )
 
     # Get predicted logits for each circuit variant when using patched feature magnitudes
@@ -97,13 +97,7 @@ def patch_feature_magnitudes(
             for circuit_variant in circuit_variants
         }
 
-        # Dont' show progress bar if only one circuit variant is provided
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="Patching feature magnitudes",
-            disable=len(circuit_variants) <= 1,
-        ):
+        for future in as_completed(futures):
             circuit_variant = futures[future]
             patched_feature_magnitudes[circuit_variant] = future.result()
 
@@ -169,6 +163,7 @@ def estimate_feature_ablation_effects(
     target_logits: torch.Tensor,
     feature_magnitudes: torch.Tensor,
     circuit_features: set[Feature],
+    num_samples: int,
 ) -> dict[Feature, float]:
     """
     Map features to KL divergence.
@@ -187,6 +182,7 @@ def estimate_feature_ablation_effects(
         target_logits,
         feature_magnitudes,
         [variant for variant in circuit_variants.values()],
+        num_samples,
     )
 
     # Map features to KL divergence
@@ -201,6 +197,7 @@ def estimate_token_ablation_effects(
     target_logits: torch.Tensor,
     feature_magnitudes: torch.Tensor,
     circuit_features: set[Feature],
+    num_samples: int,
 ) -> dict[int, float]:
     """
     Map features to KL divergence.
@@ -221,6 +218,7 @@ def estimate_token_ablation_effects(
         target_logits,
         feature_magnitudes,
         [variant for variant in circuit_variants.values()],
+        num_samples,
     )
 
     # Map token indices to KL divergence

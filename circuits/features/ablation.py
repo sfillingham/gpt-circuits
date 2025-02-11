@@ -43,7 +43,7 @@ class ResampleAblator(Ablator):
     CacheKey = tuple[int, int, tuple[int, ...], tuple[float, ...]]  # Key type for caching nearest neighbors
     nearest_neighbors_cache: dict[CacheKey, np.ndarray] = {}  # Map of cached nearest neighbors
 
-    def __init__(self, model_cache: ModelCache, k_nearest: int = 128):
+    def __init__(self, model_cache: ModelCache, k_nearest):
         """
         :param model_cache: Model cache to use for resampling.
         :param k_nearest: Max number of nearest neighbors to use for creating sample distributions.
@@ -107,8 +107,14 @@ class ResampleAblator(Ablator):
             circuit_feature_idxs,
         )
 
-        # Randomly draw indices from top candidates (with replacement) to include in samples
-        sample_idxs = np.random.choice(nearest_neighbor_idxs, size=num_samples, replace=True)
+        # Randomly draw indices from top candidates to include in samples
+        sample_size = min(len(nearest_neighbor_idxs), num_samples)
+        sample_idxs = np.random.choice(nearest_neighbor_idxs, size=sample_size, replace=False)
+        # If there are too few candidates, duplicate some
+        if len(sample_idxs) < num_samples:
+            num_duplicates = num_samples - len(sample_idxs)
+            extra_sample_idxs = np.random.choice(sample_idxs, size=num_duplicates, replace=True)
+            sample_idxs = np.concatenate((sample_idxs, extra_sample_idxs))
         token_samples = self.model_cache[layer_idx].csr_matrix[sample_idxs, :].toarray()  # Shape: (B, F)
 
         # Preserve circuit feature magnitudes
@@ -183,8 +189,7 @@ class ResampleAblator(Ablator):
         nearest_neighbor_idxs = row_idxs[np.argsort(mse)[:num_neighbors]]
 
         # Cache nearest neighbors
-        if cache_key not in self.nearest_neighbors_cache:
-            self.nearest_neighbors_cache[cache_key] = nearest_neighbor_idxs
+        self.nearest_neighbors_cache[cache_key] = nearest_neighbor_idxs
         return nearest_neighbor_idxs
 
     def get_cache_key(
