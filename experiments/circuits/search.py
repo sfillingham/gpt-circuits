@@ -1,7 +1,7 @@
 """
 Find all features needed to reconstruct the output logits of a model to within a certain KL divergence threshold.
 
-$ python -m experiments.circuits.search --sequence_idx=0 --token_idx=51 --layer_idx=0
+$ python -m experiments.circuits.search --sequence_idx=0 --token_idx=51 --start_from=40 --layer_idx=0
 """
 
 import argparse
@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--layer_idx", type=int, default=0, help="SAE layer to analyze")
     parser.add_argument("--threshold", type=float, default=0.15, help="Max threshold for KL divergence")
+    parser.add_argument("--start_from", type=int, default=0, help="Index of token to start search from")
     return parser.parse_args()
 
 
@@ -45,6 +46,7 @@ if __name__ == "__main__":
     threshold = args.threshold
     layer_idx = args.layer_idx
     target_token_idx = args.token_idx
+    start_token_idx = args.start_from
 
     # Load model
     defaults = Config()
@@ -108,14 +110,15 @@ if __name__ == "__main__":
     # Get output for layer
     feature_magnitudes = output.feature_magnitudes[layer_idx].squeeze(0)  # Shape: (T, F)
 
-    # Get non-zero features that are before or at the target token
+    # Get non-zero features where token index is in [start_token_idx...target_token_idx]
+    initial_features: set[Feature] = set({})
     non_zero_indices = torch.nonzero(feature_magnitudes, as_tuple=True)
-    all_features: set[Feature] = {
-        Feature(layer_idx, t.item(), f.item()) for t, f in zip(*non_zero_indices) if t <= target_token_idx
-    }
+    for t, f in zip(*non_zero_indices):
+        if t >= start_token_idx and t <= target_token_idx:
+            initial_features.add(Feature(layer_idx, t.item(), f.item()))
 
     # Circuit to start pruning
-    circuit_features: set[Feature] = all_features
+    circuit_features: set[Feature] = initial_features
 
     ### Part 1: Start by searching for important tokens
     print("Starting search for important tokens...")
@@ -123,9 +126,10 @@ if __name__ == "__main__":
     # Group features by token index
     features_by_token_idx: dict[int, set[Feature]] = {}
     for token_idx in range(target_token_idx + 1):
-        features_by_token_idx[token_idx] = set({f for f in all_features if f.token_idx == token_idx})
+        features_by_token_idx[token_idx] = set({f for f in initial_features if f.token_idx == token_idx})
 
     # Starting search states
+    search_threshold = threshold / 2  # Use a lower threshold for coarse search
     discard_candidates: set[Feature] = set({})
     circuit_kl_div: float = float("inf")
 
@@ -154,7 +158,7 @@ if __name__ == "__main__":
         )
 
         # If below threshold, continue search
-        if circuit_kl_div < threshold:
+        if circuit_kl_div < search_threshold:
             # Update candidate features
             circuit_features = set(circuit_candidate)
 
@@ -174,7 +178,7 @@ if __name__ == "__main__":
             discard_candidates = features_by_token_idx[least_important_token_idx]
 
             # Check for early stopping
-            if least_important_token_kl_div > threshold:
+            if least_important_token_kl_div > search_threshold:
                 print("Stopping early. Can't improve KL divergence.")
                 break
 
@@ -195,6 +199,7 @@ if __name__ == "__main__":
     print("Starting search for important features...")
 
     # Starting search states
+    search_threshold = threshold  # Use full threshold for fine-grained search
     discard_candidates: set[Feature] = set({})
     circuit_kl_div: float = float("inf")
 
@@ -216,13 +221,13 @@ if __name__ == "__main__":
 
         # Print results
         print(
-            f"Features: {len(circuit_candidate)}/{len(all_features)} - "
+            f"Features: {len(circuit_candidate)}/{len(initial_features)} - "
             f"KL Div: {circuit_kl_div:.4f} - "
             f"Predictions: {circuit_analysis.predictions}"
         )
 
         # If below threshold, continue search
-        if circuit_kl_div < threshold:
+        if circuit_kl_div < search_threshold:
             # Update candidate features
             circuit_features = set(circuit_candidate)
 
@@ -242,7 +247,7 @@ if __name__ == "__main__":
             discard_candidates = {least_important_feature}
 
             # Check for early stopping
-            if least_important_feature_kl_div > threshold:
+            if least_important_feature_kl_div > search_threshold:
                 print("Stopping early. Can't improve KL divergence.")
                 break
 
