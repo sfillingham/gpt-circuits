@@ -1,7 +1,7 @@
 """
-Find all features needed to reconstruct the output logits of a model to within a certain KL divergence threshold.
+Find all circuit nodes needed to reconstruct the output logits of a model to within a certain KL divergence threshold.
 
-$ python -m experiments.circuits.search --sequence_idx=0 --token_idx=51 --start_from=40 --layer_idx=0
+$ python -m experiments.circuits.nodes --sequence_idx=0 --token_idx=51 --start_from=40 --layer_idx=0
 """
 
 import argparse
@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", type=str, default="train", help="Dataset split to use")
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--layer_idx", type=int, default=0, help="SAE layer to analyze")
-    parser.add_argument("--threshold", type=float, default=0.15, help="Max threshold for KL divergence")
+    parser.add_argument("--threshold", type=float, default=0.1, help="Max threshold for KL divergence")
     parser.add_argument("--start_from", type=int, default=0, help="Index of token to start search from")
     return parser.parse_args()
 
