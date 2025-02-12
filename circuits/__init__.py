@@ -42,6 +42,19 @@ class Edge:
         return self.as_tuple() < other.as_tuple()
 
 
+@dataclass(frozen=True)
+class Circuit:
+    """
+    Represents a set of nodes and edges.
+    """
+
+    nodes: frozenset[Node]
+    edges: frozenset[Edge]
+
+    def __repr__(self) -> str:
+        return f"Nodes: {sorted(self.nodes)}, Edges: {sorted(self.edges)}"
+
+
 def json_prettyprint(obj) -> str:
     """
     Return a serialized dictionary as pretty-printed JSON. Lists of numbers are formatted using one line.

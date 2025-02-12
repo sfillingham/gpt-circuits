@@ -3,7 +3,7 @@ from typing import Protocol
 import numpy as np
 import torch
 
-from circuits import Node
+from circuits import Circuit, Node
 from circuits.features.cache import ModelCache
 from circuits.features.profiles import ModelProfile
 
@@ -18,7 +18,7 @@ class Ablator(Protocol):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,
-        circuit_nodes: frozenset[Node],
+        circuit: Circuit,
         num_samples: int,
     ) -> torch.Tensor:
         """
@@ -27,7 +27,7 @@ class Ablator(Protocol):
         :param layer_idx: Layer index from which feature magnitudes are taken.
         :param target_token_idx: Target token index for which logits are evaluated.
         :param feature_magnitudes: Feature magnitudes to patch. Shape: (T, F)
-        :param circuit_nodes: Circuit nodes representing features to preserve.
+        :param circuit: Circuit representing features to preserve.
         :param num_samples: Number of samples to return.
 
         :return: Patched feature magnitudes. Shape: (B, T, F)
@@ -66,7 +66,7 @@ class ResampleAblator(Ablator):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-        circuit_nodes: frozenset[Node],
+        circuit: Circuit,
         num_samples: int,
     ) -> torch.Tensor:  # Shape: (B, T, F)
         """
@@ -83,7 +83,7 @@ class ResampleAblator(Ablator):
                 layer_idx,
                 token_idx,
                 feature_magnitudes[token_idx].cpu().numpy(),  # Shape: (F)
-                {node for node in circuit_nodes if node.token_idx == token_idx and node.layer_idx == layer_idx},
+                {node for node in circuit.nodes if node.token_idx == token_idx and node.layer_idx == layer_idx},
                 num_samples,
             )
             samples[:, token_idx, :] = token_samples
@@ -254,7 +254,7 @@ class ZeroAblator(Ablator):
         layer_idx: int,
         target_token_idx: int,
         feature_magnitudes: torch.Tensor,
-        circuit_nodes: frozenset[Node],
+        circuit: Circuit,
         num_samples: int,
     ) -> torch.Tensor:
         """
@@ -262,10 +262,10 @@ class ZeroAblator(Ablator):
         """
         # Zero-ablate non-circuit features
         patched_feature_magnitudes = torch.zeros_like(feature_magnitudes)
-        if circuit_nodes:
+        if circuit.nodes:
             token_idxs: list[int] = []
             feature_idxs: list[int] = []
-            for node in circuit_nodes:
+            for node in circuit.nodes:
                 # Only preserve features from the target layer that are on or before the target token
                 if node.layer_idx == layer_idx and node.token_idx <= target_token_idx:
                     token_idxs.append(node.token_idx)
