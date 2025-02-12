@@ -5,19 +5,19 @@ from typing import Sequence
 import torch
 
 from circuits.features import Feature
-from circuits.features.ablation import Ablator
+from circuits.search.ablation import Ablator
 from data.tokenizers import Tokenizer
 from models.sparsified import SparsifiedGPT
 
 
 @dataclass(frozen=True)
-class CircuitResult:
+class Divergence:
     kl_divergence: float
     predictions: dict[str, float]
 
 
 @torch.no_grad()
-def analyze_circuits(
+def analyze_divergence(
     model: SparsifiedGPT,
     ablator: Ablator,
     layer_idx: int,
@@ -26,12 +26,12 @@ def analyze_circuits(
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
     circuit_variants: Sequence[frozenset[Feature]],
     num_samples: int,
-) -> dict[frozenset[Feature], CircuitResult]:
+) -> dict[frozenset[Feature], Divergence]:
     """
-    Calculate KL divergence between target logits and logits produced by model using reconstructed activations.
+    Calculate KL divergence between target logits and logits produced through use of circuit features.
     """
     # For storing results
-    results: dict[frozenset[Feature], CircuitResult] = {}
+    results: dict[frozenset[Feature], Divergence] = {}
 
     # Patch feature magnitudes for each circuit variant
     patched_feature_magnitudes = patch_feature_magnitudes(
@@ -64,7 +64,7 @@ def analyze_circuits(
         predictions = get_predictions(model.gpt.config.tokenizer, circuit_logits)
 
         # Store results
-        results[circuit_variant] = CircuitResult(kl_divergence=kl_div.item(), predictions=predictions)
+        results[circuit_variant] = Divergence(kl_divergence=kl_div.item(), predictions=predictions)
 
     return results
 
@@ -153,73 +153,3 @@ def get_predictions(
     for i, p in zip(topk.indices, topk.values):
         results[tokenizer.decode_token(int(i.item()))] = round(p.item() * 100, 2)
     return results
-
-
-def estimate_feature_ablation_effects(
-    model: SparsifiedGPT,
-    ablator: Ablator,
-    layer_idx: int,
-    target_token_idx: int,
-    target_logits: torch.Tensor,
-    feature_magnitudes: torch.Tensor,
-    circuit_features: set[Feature],
-    num_samples: int,
-) -> dict[Feature, float]:
-    """
-    Map features to KL divergence.
-    """
-    # Generate all variations with one feature removed
-    circuit_variants: dict[Feature, frozenset[Feature]] = {}
-    for feature in circuit_features:
-        circuit_variants[feature] = frozenset([f for f in circuit_features if f != feature])
-
-    # Calculate KL divergence for each variant
-    kld_results = analyze_circuits(
-        model,
-        ablator,
-        layer_idx,
-        target_token_idx,
-        target_logits,
-        feature_magnitudes,
-        [variant for variant in circuit_variants.values()],
-        num_samples,
-    )
-
-    # Map features to KL divergence
-    return {feature: kld_results[variant].kl_divergence for feature, variant in circuit_variants.items()}
-
-
-def estimate_token_ablation_effects(
-    model: SparsifiedGPT,
-    ablator: Ablator,
-    layer_idx: int,
-    target_token_idx: int,
-    target_logits: torch.Tensor,
-    feature_magnitudes: torch.Tensor,
-    circuit_features: set[Feature],
-    num_samples: int,
-) -> dict[int, float]:
-    """
-    Map features to KL divergence.
-    """
-    # Generate all variations with one token removed
-    circuit_variants: dict[int, frozenset[Feature]] = {}
-    unique_token_indices = {f.token_idx for f in circuit_features}
-    for token_idx in unique_token_indices:
-        circuit_variant = frozenset([f for f in circuit_features if f.token_idx != token_idx])
-        circuit_variants[token_idx] = circuit_variant
-
-    # Calculate KL divergence for each variant
-    kld_results = analyze_circuits(
-        model,
-        ablator,
-        layer_idx,
-        target_token_idx,
-        target_logits,
-        feature_magnitudes,
-        [variant for variant in circuit_variants.values()],
-        num_samples,
-    )
-
-    # Map token indices to KL divergence
-    return {token_idx: kld_results[variant].kl_divergence for token_idx, variant in circuit_variants.items()}
