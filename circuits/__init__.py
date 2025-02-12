@@ -17,9 +17,28 @@ class Node:
         return self.layer_idx, self.token_idx, self.feature_idx
 
     def __repr__(self) -> str:
-        return f"({f'{self.token_idx},': <4}{self.feature_idx: >4})"
+        return f"({self.layer_idx},{self.token_idx},{self.feature_idx})"
 
     def __lt__(self, other: "Node") -> bool:
+        return self.as_tuple() < other.as_tuple()
+
+
+@dataclass(frozen=True)
+class Edge:
+    """
+    Represents a connection between two features.
+    """
+
+    upstream: Node
+    downstream: Node
+
+    def __repr__(self) -> str:
+        return f"{self.upstream} -> {self.downstream}"
+
+    def as_tuple(self) -> tuple[int, ...]:
+        return self.upstream.as_tuple() + self.downstream.as_tuple()
+
+    def __lt__(self, other: "Edge") -> bool:
         return self.as_tuple() < other.as_tuple()
 
 

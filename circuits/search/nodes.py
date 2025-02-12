@@ -87,7 +87,7 @@ class NodeSearch:
             nodes_by_token_idx[token_idx] = set({node for node in initial_nodes if node.token_idx == token_idx})
 
         # Starting search states
-        search_threshold = max(baseline_kl_div, threshold / 2)  # Use a lower threshold for coarse search
+        search_threshold = max(min(threshold, baseline_kl_div), threshold / 2)  # Lower threshold for coarse search
         discard_candidates: set[Node] = set({})
         circuit_kl_div: float = float("inf")
 

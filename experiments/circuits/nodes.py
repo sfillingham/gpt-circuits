@@ -6,6 +6,7 @@ $ python -m experiments.circuits.nodes --sequence_idx=0 --token_idx=51 --start_f
 """
 
 import argparse
+from collections import defaultdict
 from pathlib import Path
 
 import torch
@@ -48,7 +49,7 @@ if __name__ == "__main__":
     # Set paths
     checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
     dirname = f"{args.split}.{args.shard_idx}.{args.sequence_idx}.{args.token_idx}"
-    export_dir = Path("exports") / args.model / "circuits" / dirname
+    circuit_dir = Path("exports") / args.model / "circuits" / dirname
 
     # Load model
     defaults = Config()
@@ -90,23 +91,24 @@ if __name__ == "__main__":
 
     # Start search
     node_search = NodeSearch(model, ablator, num_samples)
-    circuit_features = node_search.search(tokens, layer_idx, start_token_idx, target_token_idx, threshold)
+    circuit_nodes = node_search.search(tokens, layer_idx, start_token_idx, target_token_idx, threshold)
 
     # Group features by token idx
-    nodes = {}
-    for feature in sorted(circuit_features):
-        nodes.setdefault(feature.token_idx, []).append(feature.feature_idx)
+    grouped_nodes = defaultdict(list)
+    for node in sorted(circuit_nodes):
+        grouped_nodes[node.token_idx].append(node.feature_idx)
 
     # Export circuit features
     data = {
+        "data_dir": args.data_dir,
         "split": args.split,
         "shard_idx": args.shard_idx,
         "sequence_idx": args.sequence_idx,
-        "target_token_idx": target_token_idx,
+        "token_idx": target_token_idx,
         "layer_idx": layer_idx,
         "threshold": threshold,
-        "nodes": nodes,
+        "nodes": grouped_nodes,
     }
-    export_dir.mkdir(parents=True, exist_ok=True)
-    with open(export_dir / f"nodes.{layer_idx}.json", "w") as f:
+    circuit_dir.mkdir(parents=True, exist_ok=True)
+    with open(circuit_dir / f"nodes.{layer_idx}.json", "w") as f:
         f.write(json_prettyprint(data))
