@@ -4,7 +4,7 @@ from typing import Sequence
 
 import torch
 
-from circuits.features import Feature
+from circuits import Node
 from circuits.search.ablation import Ablator
 from data.tokenizers import Tokenizer
 from models.sparsified import SparsifiedGPT
@@ -24,14 +24,14 @@ def analyze_divergence(
     target_token_idx: int,
     target_logits: torch.Tensor,  # Shape: (V)
     feature_magnitudes: torch.Tensor,  # Shape: (T, F)
-    circuit_variants: Sequence[frozenset[Feature]],
+    circuit_variants: Sequence[frozenset[Node]],
     num_samples: int,
-) -> dict[frozenset[Feature], Divergence]:
+) -> dict[frozenset[Node], Divergence]:
     """
     Calculate KL divergence between target logits and logits produced through use of circuit features.
     """
     # For storing results
-    results: dict[frozenset[Feature], Divergence] = {}
+    results: dict[frozenset[Node], Divergence] = {}
 
     # Patch feature magnitudes for each circuit variant
     patched_feature_magnitudes = patch_feature_magnitudes(
@@ -74,14 +74,14 @@ def patch_feature_magnitudes(
     layer_idx: int,
     target_token_idx: int,
     feature_magnitudes: torch.Tensor,
-    circuit_variants: Sequence[frozenset[Feature]],
+    circuit_variants: Sequence[frozenset[Node]],
     num_samples: int,
-) -> dict[frozenset[Feature], torch.Tensor]:  # Shape: (num_samples, T, F)
+) -> dict[frozenset[Node], torch.Tensor]:  # Shape: (num_samples, T, F)
     """
     Patch feature magnitudes for a list of circuit variants.
     """
     # For mapping variants to patched feature magnitudes
-    patched_feature_magnitudes: dict[frozenset[Feature], torch.Tensor] = {}
+    patched_feature_magnitudes: dict[frozenset[Node], torch.Tensor] = {}
 
     # Patch feature magnitudes for each variant
     with ThreadPoolExecutor() as executor:
@@ -91,7 +91,7 @@ def patch_feature_magnitudes(
                 layer_idx=layer_idx,
                 target_token_idx=target_token_idx,
                 feature_magnitudes=feature_magnitudes,
-                circuit_features=circuit_variant,
+                circuit_nodes=circuit_variant,
                 num_samples=num_samples,
             ): circuit_variant
             for circuit_variant in circuit_variants
@@ -108,15 +108,15 @@ def patch_feature_magnitudes(
 def get_predicted_logits(
     model: SparsifiedGPT,
     layer_idx: int,
-    patched_feature_magnitudes: dict[frozenset[Feature], torch.Tensor],  # Shape: (num_samples, T, F)
+    patched_feature_magnitudes: dict[frozenset[Node], torch.Tensor],  # Shape: (num_samples, T, F)
     target_token_idx: int,
-) -> dict[frozenset[Feature], torch.Tensor]:  # Shape: (V)
+) -> dict[frozenset[Node], torch.Tensor]:  # Shape: (V)
     """
     Get predicted logits for a set of circuit variants when using patched feature magnitudes.
 
     TODO: Use batching to improve performance
     """
-    results: dict[frozenset[Feature], torch.Tensor] = {}
+    results: dict[frozenset[Node], torch.Tensor] = {}
 
     for circuit_variant, circuit_feature_magnitudes in patched_feature_magnitudes.items():
         # Reconstruct activations and compute logits

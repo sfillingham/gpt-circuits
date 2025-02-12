@@ -2,7 +2,6 @@
 Utility functions for computing and caching feature metrics.
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -13,26 +12,6 @@ from circuits.features.samples import ModelSampleSet
 from config import Config
 from data.dataloaders import DatasetShard
 from models.sparsified import SparsifiedGPT
-
-
-@dataclass(frozen=True)
-class Feature:
-    """
-    Represents a feature at a specific location.
-    """
-
-    layer_idx: int
-    token_idx: int
-    feature_idx: int
-
-    def as_tuple(self) -> tuple[int, int, int]:
-        return self.layer_idx, self.token_idx, self.feature_idx
-
-    def __repr__(self) -> str:
-        return f"({f'{self.token_idx},': <4}{self.feature_idx: >4})"
-
-    def __lt__(self, other: "Feature") -> bool:
-        return self.as_tuple() < other.as_tuple()
 
 
 def compute_metrics(checkpoint_dir: Path, shard: DatasetShard, batch_size: int = 256):

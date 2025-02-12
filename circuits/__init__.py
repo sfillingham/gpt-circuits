@@ -1,5 +1,26 @@
 import json
 import re
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Node:
+    """
+    Represents a feature at a specific location.
+    """
+
+    layer_idx: int
+    token_idx: int
+    feature_idx: int
+
+    def as_tuple(self) -> tuple[int, int, int]:
+        return self.layer_idx, self.token_idx, self.feature_idx
+
+    def __repr__(self) -> str:
+        return f"({f'{self.token_idx},': <4}{self.feature_idx: >4})"
+
+    def __lt__(self, other: "Node") -> bool:
+        return self.as_tuple() < other.as_tuple()
 
 
 def json_prettyprint(obj) -> str:
