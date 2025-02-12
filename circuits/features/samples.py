@@ -1,6 +1,4 @@
-import json
 import random
-import re
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -10,6 +8,7 @@ import numpy as np
 from scipy import sparse
 from tqdm import tqdm
 
+from circuits import json_prettyprint
 from circuits.features.cache import LayerCache, ModelCache
 from data.dataloaders import DatasetShard
 from data.tokenizers import Tokenizer
@@ -257,13 +256,7 @@ class FeatureSampleSet:
             )
         outdir.parent.mkdir(parents=True, exist_ok=True)
         with open(outdir, "w") as f:
-            serialized_data = json.dumps(data, indent=2)
-
-            # Regex pattern to remove new lines between "[" and "]"
-            pattern = re.compile(r'\[\s*([^"]*?)\s*\]', re.DOTALL)
-            serialized_data = pattern.sub(lambda m: "[" + " ".join(m.group(1).split()) + "]", serialized_data)
-
-            f.write(serialized_data)
+            f.write(json_prettyprint(data))
 
 
 @dataclass

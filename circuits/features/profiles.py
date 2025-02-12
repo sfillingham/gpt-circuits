@@ -1,6 +1,5 @@
 import dataclasses
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -8,6 +7,7 @@ from typing import Optional
 import numpy as np
 from tqdm import tqdm
 
+from circuits import json_prettyprint
 from circuits.features.cache import LayerCache, ModelCache
 
 
@@ -117,13 +117,7 @@ class LayerProfile:
         """
         with open(checkpoint_dir / self.filename, "w") as f:
             data = {k: dataclasses.asdict(v) for k, v in self.features.items()}
-            serialized_data = json.dumps(data, indent=2)
-
-            # Regex pattern to remove new lines between "[" and "]"
-            pattern = re.compile(r'\[\s*([^"]*?)\s*\]', re.DOTALL)
-            serialized_data = pattern.sub(lambda m: "[" + " ".join(m.group(1).split()) + "]", serialized_data)
-
-            f.write(serialized_data)
+            f.write(json_prettyprint(data))
 
     def load(self, checkpoint_dir: Path):
         """

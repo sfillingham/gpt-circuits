@@ -31,6 +31,9 @@ class Feature:
     def __repr__(self) -> str:
         return f"({f'{self.token_idx},': <4}{self.feature_idx: >4})"
 
+    def __lt__(self, other: "Feature") -> bool:
+        return self.as_tuple() < other.as_tuple()
+
 
 def compute_metrics(checkpoint_dir: Path, shard: DatasetShard, batch_size: int = 256):
     """

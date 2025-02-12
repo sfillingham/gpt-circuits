@@ -1,13 +1,16 @@
 """
-Find all circuit nodes needed to reconstruct the output logits of a model to within a certain KL divergence threshold.
+Find and export all circuit nodes needed to reconstruct the output logits of a model to within a certain KL divergence
+threshold.
 
 $ python -m experiments.circuits.nodes --sequence_idx=0 --token_idx=51 --start_from=40 --layer_idx=0
 """
 
 import argparse
+from pathlib import Path
 
 import torch
 
+from circuits import json_prettyprint
 from circuits.features.cache import ModelCache
 from circuits.features.profiles import ModelProfile
 from circuits.search.ablation import ResampleAblator, ZeroAblator  # noqa: F401
@@ -42,9 +45,13 @@ if __name__ == "__main__":
     target_token_idx = args.token_idx
     start_token_idx = args.start_from
 
+    # Set paths
+    checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
+    dirname = f"{args.split}.{args.shard_idx}.{args.sequence_idx}.{args.token_idx}"
+    export_dir = Path("exports") / args.model / "circuits" / dirname
+
     # Load model
     defaults = Config()
-    checkpoint_dir = TrainingConfig.checkpoints_dir / args.model
     model: SparsifiedGPT = SparsifiedGPT.load(checkpoint_dir, device=defaults.device).to(defaults.device)
     model.eval()
 
@@ -84,4 +91,22 @@ if __name__ == "__main__":
     # Start search
     node_search = NodeSearch(model, ablator, num_samples)
     circuit_features = node_search.search(tokens, layer_idx, start_token_idx, target_token_idx, threshold)
-    print(f"Found {len(circuit_features)} features")
+
+    # Group features by token idx
+    nodes = {}
+    for feature in sorted(circuit_features):
+        nodes.setdefault(feature.token_idx, []).append(feature.feature_idx)
+
+    # Export circuit features
+    data = {
+        "split": args.split,
+        "shard_idx": args.shard_idx,
+        "sequence_idx": args.sequence_idx,
+        "target_token_idx": target_token_idx,
+        "layer_idx": layer_idx,
+        "threshold": threshold,
+        "nodes": nodes,
+    }
+    export_dir.mkdir(parents=True, exist_ok=True)
+    with open(export_dir / f"nodes.{layer_idx}.json", "w") as f:
+        f.write(json_prettyprint(data))
