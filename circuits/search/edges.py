@@ -166,20 +166,31 @@ class EdgeSearch:
 
         # Patch upstream feature magnitudes for each set of dependencies
         circuit_variants = [Circuit(nodes=dependencies) for dependencies in dependencies_to_nodes.keys()]
-        upstream_idx = next(iter(downstream_nodes)).layer_idx - 1
+        upstream_layer_idx = next(iter(downstream_nodes)).layer_idx - 1
         patched_upstream_magnitudes = patch_feature_magnitudes(  # Shape: (num_samples, T, F)
             self.ablator,
-            upstream_idx,
+            upstream_layer_idx,
             target_token_idx,
             circuit_variants,
             [upstream_magnitudes] * len(circuit_variants),
             num_samples=self.num_samples,
         )
 
+        # Compute downstream feature magnitudes from unpatched upstream feature magnitudes. Used for error correction.
+        computed_downstream_magnitudes = next(  # Shape: (T, F)
+            iter(
+                compute_downstream_magnitudes(
+                    self.model,
+                    upstream_layer_idx,
+                    {Circuit(nodes=frozenset({})): upstream_magnitudes.unsqueeze(0)},
+                ).values()
+            )
+        ).squeeze(0)
+
         # Compute downstream feature magnitudes for each set of dependencies
         sampled_downstream_magnitudes = compute_downstream_magnitudes(  # Shape: (num_samples, T, F)
             self.model,
-            upstream_idx,
+            upstream_layer_idx,
             patched_upstream_magnitudes,
         )
 
@@ -192,7 +203,14 @@ class EdgeSearch:
         # Patch downstream feature magnitudes using an average of the sampled feature magnitudes
         patched_downstream_magnitudes = original_downstream_magnitudes.clone()
         for node, sampled_magnitudes in node_to_sampled_magnitudes.items():
-            patched_downstream_magnitudes[node.token_idx, node.feature_idx] = sampled_magnitudes.mean(dim=0)
+            token_idx = node.token_idx
+            feature_idx = node.feature_idx
+            mean = sampled_magnitudes.mean(dim=0)
+            error = (
+                computed_downstream_magnitudes[token_idx, feature_idx]
+                - original_downstream_magnitudes[token_idx, feature_idx]
+            )
+            patched_downstream_magnitudes[token_idx, feature_idx] = mean - error
 
         return patched_downstream_magnitudes
 
