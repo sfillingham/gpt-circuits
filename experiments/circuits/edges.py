@@ -132,7 +132,7 @@ if __name__ == "__main__":
         "token_idx": target_token_idx,
         "layer_idx": upstream_layer_idx + 1,
         "threshold": threshold,
-        "egdes": grouped_edges,
+        "edges": grouped_edges,
     }
     circuit_dir.mkdir(parents=True, exist_ok=True)
     with open(circuit_dir / f"edges.{upstream_layer_idx + 1}.json", "w") as f:
