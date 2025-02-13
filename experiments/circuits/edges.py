@@ -7,11 +7,12 @@ $ python -m experiments.circuits.edges --circuit=train.0.0.51 --upstream_layer=0
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import torch
 
-from circuits import Edge, Node
+from circuits import Edge, Node, json_prettyprint
 from circuits.features.cache import ModelCache
 from circuits.features.profiles import ModelProfile
 from circuits.search.ablation import ResampleAblator, ZeroAblator  # noqa: F401
@@ -29,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--circuit", type=str, default="train.0.0.51", help="Circuit directory name")
     parser.add_argument("--upstream_layer", type=int, default=0, help="Find edges from this layer")
-    parser.add_argument("--threshold", type=float, default=0.1, help="Max threshold for KL divergence")
+    parser.add_argument("--threshold", type=float, default=0.15, help="Max threshold for KL divergence")
     return parser.parse_args()
 
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
         shard_idx = upstream_json["shard_idx"]
         sequence_idx = upstream_json["sequence_idx"]
         target_token_idx = upstream_json["token_idx"]
-        layer_idx = upstream_json["layer_idx"]
+        upstream_layer_idx = upstream_json["layer_idx"]
 
     # Load shard
     shard = DatasetShard(dir_path=data_dir, split=split, shard_idx=shard_idx)
@@ -89,23 +90,50 @@ if __name__ == "__main__":
     decoded_target = tokenizer.decode_token(tokens[target_token_idx])
     print(f'Using sequence: "{decoded_tokens.replace("\n", "\\n")}"')
     print(f"Target token: `{decoded_target}` at index {target_token_idx}")
-    print(f"Target layer: {layer_idx}")
+    print(f"Target layer: {upstream_layer_idx}")
     print(f"Target threshold: {threshold}")
 
-    # Load nodes
+    # Load upstream nodes
     upstream_nodes = set()
     with open(upstream_path) as f:
         data = json.load(f)
         for token_idx, feature_idxs in data["nodes"].items():
             for feature_idx in feature_idxs:
-                upstream_nodes.add(Node(layer_idx, int(token_idx), feature_idx))
+                upstream_nodes.add(Node(upstream_layer_idx, int(token_idx), feature_idx))
+    upstream_nodes = frozenset(upstream_nodes)
+
+    # Load downstream nodes
     downstream_nodes = set()
     with open(downstream_path) as f:
         data = json.load(f)
         for token_idx, feature_idxs in data["nodes"].items():
             for feature_idx in feature_idxs:
-                downstream_nodes.add(Node(layer_idx + 1, int(token_idx), feature_idx))
+                downstream_nodes.add(Node(upstream_layer_idx + 1, int(token_idx), feature_idx))
+    downstream_nodes = frozenset(downstream_nodes)
 
     # Start search
     edge_search = EdgeSearch(model, ablator, num_samples)
-    circuit_edges: frozenset[Edge] = edge_search.search(tokens, upstream_nodes, downstream_nodes, threshold)
+    circuit_edges: frozenset[Edge] = edge_search.search(
+        tokens, target_token_idx, upstream_nodes, downstream_nodes, threshold
+    )
+
+    # Group edges by downstream token
+    grouped_edges = defaultdict(list)
+    for downstream_node in sorted(downstream_nodes):
+        edges = [edge for edge in circuit_edges if edge.downstream == downstream_node]
+        grouped_edges[str(downstream_node)] = [str(edge.upstream) for edge in sorted(edges)]
+
+    # Export circuit features
+    data = {
+        "data_dir": data_dir,
+        "split": split,
+        "shard_idx": shard_idx,
+        "sequence_idx": sequence_idx,
+        "token_idx": target_token_idx,
+        "layer_idx": upstream_layer_idx + 1,
+        "threshold": threshold,
+        "egdes": grouped_edges,
+    }
+    circuit_dir.mkdir(parents=True, exist_ok=True)
+    with open(circuit_dir / f"edges.{upstream_layer_idx + 1}.json", "w") as f:
+        f.write(json_prettyprint(data))

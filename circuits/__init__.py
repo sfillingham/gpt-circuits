@@ -49,7 +49,7 @@ class Circuit:
     """
 
     nodes: frozenset[Node]
-    edges: frozenset[Edge]
+    edges: frozenset[Edge] = frozenset()
 
     def __repr__(self) -> str:
         return f"Nodes: {sorted(self.nodes)}, Edges: {sorted(self.edges)}"

@@ -94,7 +94,7 @@ class NodeSearch:
         # Start search
         for _ in range(target_token_idx + 1):
             # Compute KL divergence
-            circuit_candidate = Circuit(nodes=frozenset(circuit_nodes - discard_candidates), edges=frozenset())
+            circuit_candidate = Circuit(nodes=frozenset(circuit_nodes - discard_candidates))
             circuit_analysis = analyze_divergence(
                 self.model,
                 self.ablator,
@@ -117,7 +117,7 @@ class NodeSearch:
 
             # If below threshold, continue search
             if circuit_kl_div < search_threshold:
-                # Update candidate circuit
+                # Update circuit
                 circuit_nodes = circuit_candidate.nodes
 
                 # Sort tokens by KL divergence (descending)
@@ -158,10 +158,10 @@ class NodeSearch:
         discard_candidates: set[Node] = set({})
         circuit_kl_div: float = float("inf")
 
-        # # Start search
+        # Start search
         for _ in range(len(circuit_nodes)):
             # Compute KL divergence
-            circuit_candidate = Circuit(nodes=frozenset(circuit_nodes - discard_candidates), edges=frozenset())
+            circuit_candidate = Circuit(nodes=frozenset(circuit_nodes - discard_candidates))
             circuit_analysis = analyze_divergence(
                 self.model,
                 self.ablator,
@@ -183,7 +183,7 @@ class NodeSearch:
 
             # If below threshold, continue search
             if circuit_kl_div < search_threshold:
-                # Update candidate circuit
+                # Update circuit
                 circuit_nodes = circuit_candidate.nodes
 
                 # Sort features by KL divergence (descending)
@@ -232,10 +232,7 @@ class NodeSearch:
         # Generate all circuit variations with one node removed
         circuit_variants: dict[Node, Circuit] = {}
         for node in circuit_nodes:
-            circuit_variants[node] = Circuit(
-                nodes=frozenset([n for n in circuit_nodes if n != node]),
-                edges=frozenset(),
-            )
+            circuit_variants[node] = Circuit(nodes=frozenset([n for n in circuit_nodes if n != node]))
 
         # Calculate KL divergence for each variant
         kld_results = analyze_divergence(
@@ -267,10 +264,7 @@ class NodeSearch:
         circuit_variants: dict[int, Circuit] = {}
         unique_token_indices = {node.token_idx for node in circuit_nodes}
         for token_idx in unique_token_indices:
-            circuit_variant = Circuit(
-                nodes=frozenset([node for node in circuit_nodes if node.token_idx != token_idx]),
-                edges=frozenset(),
-            )
+            circuit_variant = Circuit(nodes=frozenset([node for node in circuit_nodes if node.token_idx != token_idx]))
             circuit_variants[token_idx] = circuit_variant
 
         # Calculate KL divergence for each variant

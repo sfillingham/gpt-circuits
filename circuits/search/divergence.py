@@ -16,7 +16,6 @@ class Divergence:
     predictions: dict[str, float]
 
 
-@torch.no_grad()
 def analyze_divergence(
     model: SparsifiedGPT,
     ablator: Ablator,
@@ -114,6 +113,7 @@ def patch_feature_magnitudes(
     return patched_feature_magnitudes
 
 
+@torch.no_grad()
 def get_predicted_logits(
     model: SparsifiedGPT,
     layer_idx: int,
@@ -127,9 +127,11 @@ def get_predicted_logits(
     """
     results: dict[Circuit, torch.Tensor] = {}
 
-    for circuit_variant, circuit_feature_magnitudes in patched_feature_magnitudes.items():
-        # Reconstruct activations and compute logits
-        x_reconstructed = model.saes[str(layer_idx)].decode(circuit_feature_magnitudes)  # type: ignore
+    for circuit_variant, feature_magnitudes in patched_feature_magnitudes.items():
+        # Reconstruct activations
+        x_reconstructed = model.saes[str(layer_idx)].decode(feature_magnitudes)  # type: ignore
+
+        # Compute logits
         predicted_logits = model.gpt.forward_with_patched_activations(
             x_reconstructed, layer_idx=layer_idx
         )  # Shape: (num_samples, T, V)
@@ -144,6 +146,36 @@ def get_predicted_logits(
 
         # Store results
         results[circuit_variant] = predicted_logits
+
+    return results
+
+
+@torch.no_grad()
+def compute_downstream_magnitudes(
+    model: SparsifiedGPT,
+    layer_idx: int,
+    patched_feature_magnitudes: dict[Circuit, torch.Tensor],  # Shape: (num_samples, T, F)
+) -> dict[Circuit, torch.Tensor]:  # Shape: (num_sample, T, F)
+    """
+    Get downstream feature magnitudes for a set of circuit variants when using patched feature magnitudes.
+
+    TODO: Use batching to improve performance
+    """
+    results: dict[Circuit, torch.Tensor] = {}
+
+    for circuit_variant, feature_magnitudes in patched_feature_magnitudes.items():
+        # Reconstruct activations
+        x_reconstructed = model.saes[str(layer_idx)].decode(feature_magnitudes)  # type: ignore
+
+        # Compute downstream activations
+        x_downstream = model.gpt.transformer.h[layer_idx](x_reconstructed)  # type: ignore
+
+        # Encode to get feature magnitudes
+        downstream_sae = model.saes[str(layer_idx + 1)]
+        downstream_feature_magnitudes = downstream_sae(x_downstream).feature_magnitudes  # Shape: (num_sample, T, F)
+
+        # Store results
+        results[circuit_variant] = downstream_feature_magnitudes
 
     return results
 
