@@ -37,9 +37,6 @@ class ConcurrentTrainer(SAETrainer):
         """
         # Create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
-        self.checkpoint_l0s = torch.zeros((len(model.saes),), device=config.device)
-        self.checkpoint_ce_loss_increases = torch.zeros((len(model.saes),), device=config.device)
-        self.checkpoint_compound_ce_loss_increase = torch.tensor(0.0, device=config.device)
 
         # Load GPT weights
         model.load_gpt_weights(load_from)

@@ -40,7 +40,6 @@ class RegularizationTrainer(SAETrainer):
 
         # create model
         model = SparsifiedGPT(config.sae_config, config.loss_coefficients, config.trainable_layers)
-        self.checkpoint_ce_loss = torch.tensor(float("inf"), device=config.device)
 
         super().__init__(model, config)
 

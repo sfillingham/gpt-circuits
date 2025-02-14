@@ -23,6 +23,18 @@ class SAETrainer(Trainer):
     checkpoint_ce_loss_increases: torch.Tensor
     checkpoint_compound_ce_loss_increase: torch.Tensor
 
+    def __init__(self, model: SparsifiedGPT, config: SAETrainingConfig):
+        """
+        Initialize the trainer.
+        """
+
+        self.checkpoint_l0s = torch.zeros((len(model.saes),), device=config.device)
+        self.checkpoint_ce_loss = torch.tensor(float("inf"), device=config.device)
+        self.checkpoint_ce_loss_increases = torch.zeros((len(model.saes),), device=config.device)
+        self.checkpoint_compound_ce_loss_increase = torch.tensor(0.0, device=config.device)
+
+        super().__init__(model, config)
+
     def calculate_loss(self, x, y, is_eval) -> tuple[torch.Tensor, Optional[dict[str, torch.Tensor]]]:
         """
         Calculate model loss.
