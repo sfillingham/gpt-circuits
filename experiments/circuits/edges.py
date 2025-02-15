@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--circuit", type=str, default="train.0.0.51", help="Circuit directory name")
     parser.add_argument("--upstream_layer", type=int, default=0, help="Find edges from this layer")
-    parser.add_argument("--threshold", type=float, default=0.15, help="Threshold for MSE increase (e.g.: 0.1 = 10%)")
+    parser.add_argument("--threshold", type=float, default=0.2, help="Threshold for MSE increase (e.g.: 0.1 = 10%)")
     return parser.parse_args()
 
 
