@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--circuit", type=str, default="train.0.0.51", help="Circuit directory name")
     parser.add_argument("--upstream_layer", type=int, default=0, help="Find edges from this layer")
-    parser.add_argument("--threshold", type=float, default=0.15, help="Max threshold for KL divergence")
+    parser.add_argument("--threshold", type=float, default=0.15, help="Threshold for MSE increase (e.g.: 0.1 = 10%)")
     return parser.parse_args()
 
 
@@ -60,8 +60,8 @@ if __name__ == "__main__":
 
     # Set feature ablation strategy
     # ablator = ZeroAblator()
-    k_nearest = 128  # How many nearest neighbors to consider in resampling
-    num_samples = 128  # Number of samples to use for estimating KL divergence
+    k_nearest = 256  # How many nearest neighbors to consider in resampling
+    num_samples = 256  # Number of samples to use for estimating KL divergence
     positional_coefficient = 2.0  # How important is the position of a feature
     ablator = ResampleAblator(
         model_profile,
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     downstream_nodes = frozenset(downstream_nodes)
 
     # Start search
-    edge_search = EdgeSearch(model, ablator, num_samples)
+    edge_search = EdgeSearch(model, model_profile, ablator, num_samples)
     circuit_edges: frozenset[Edge] = edge_search.search(
         tokens, target_token_idx, upstream_nodes, downstream_nodes, threshold
     )

@@ -3,9 +3,9 @@ from collections import defaultdict
 import torch
 
 from circuits import Circuit, Edge, Node
+from circuits.features.profiles import ModelProfile
 from circuits.search.ablation import Ablator
 from circuits.search.divergence import (
-    analyze_divergence,
     compute_downstream_magnitudes,
     patch_feature_magnitudes,
 )
@@ -17,13 +17,15 @@ class EdgeSearch:
     Search for circuit edges in a sparsified model.
     """
 
-    def __init__(self, model: SparsifiedGPT, ablator: Ablator, num_samples: int):
+    def __init__(self, model: SparsifiedGPT, model_profile: ModelProfile, ablator: Ablator, num_samples: int):
         """
         :param model: The sparsified model to use for circuit extraction.
+        :param model_profile: The model profile containing cache feature metrics.
         :param ablator: Ablation tecnique to use for circuit extraction.
         :param num_samples: The number of samples to use for ablation.
         """
         self.model = model
+        self.model_profile = model_profile
         self.ablator = ablator
         self.num_samples = num_samples
 
@@ -41,7 +43,7 @@ class EdgeSearch:
         :param tokens: The token sequence to use for circuit extraction.
         :param upstream_nodes: The upstream nodes to use for circuit extraction.
         :param downstream_nodes: The downstream nodes to use for circuit extraction.
-        :param threshold: The threshold to use for circuit extraction.
+        :param threshold: Mean-squared increase to use as search threshold (e.g. 0.1 = 10% increase).
         """
         assert len(downstream_nodes) > 0
         downstream_idx = next(iter(downstream_nodes)).layer_idx
@@ -50,12 +52,9 @@ class EdgeSearch:
         # Convert tokens to tensor
         input: torch.Tensor = torch.tensor(tokens, device=self.model.config.device).unsqueeze(0)  # Shape: (1, T)
 
-        # Get target logits
+        # Get feature magnitudes
         with torch.no_grad():
             output: SparsifiedGPTOutput = self.model(input)
-        target_logits = output.logits.squeeze(0)[target_token_idx]  # Shape: (V)
-
-        # Get feature magnitudes
         upstream_magnitudes = output.feature_magnitudes[upstream_idx].squeeze(0)  # Shape: (T, F)
         original_downstream_magnitudes = output.feature_magnitudes[downstream_idx].squeeze(0)  # Shape: (T, F)
 
@@ -66,16 +65,28 @@ class EdgeSearch:
                 if upstream.token_idx <= downstream.token_idx:
                     initial_edges.add(Edge(upstream, downstream))
 
+        # Set baseline MSE to use for computing search threshold
+        baseline_error = self.estimate_downstream_mse(
+            downstream_nodes,
+            frozenset(initial_edges),
+            upstream_magnitudes,
+            original_downstream_magnitudes,
+            target_token_idx,
+        )
+        print(f"MSE baseline: {baseline_error:.4f}")
+
         # Starting search states
+        search_threshold = baseline_error * (threshold + 1.0)  # Threshold parameter defines MSE increase fraction
         circuit_edges: frozenset[Edge] = frozenset(initial_edges)  # Circuit to start pruning
         discard_candidates: frozenset[Edge] = frozenset()
-        circuit_kl_div: float = float("inf")
+        downstream_error: float = float("inf")
+        print(f"MSE threshold: {search_threshold:.4f}")
 
         # Start search
         for _ in range(len(initial_edges)):
-            # Derive downstream magnitudes from upstream magnitudes and edges
+            # Derive downstream magnitudes from upstream magnitudes and edges to produce a mean-squared error
             circuit_candidate = Circuit(downstream_nodes, edges=frozenset(circuit_edges - discard_candidates))
-            downstream_magnitudes = self.derive_downstream_magnitudes(
+            downstream_error = self.estimate_downstream_mse(
                 downstream_nodes,
                 circuit_candidate.edges,
                 upstream_magnitudes,
@@ -83,52 +94,37 @@ class EdgeSearch:
                 target_token_idx,
             )
 
-            # Compute KL divergence
-            circuit_analysis = analyze_divergence(
-                self.model,
-                self.ablator,
-                downstream_idx,
-                target_token_idx,
-                target_logits,
-                [circuit_candidate],
-                [downstream_magnitudes],
-                num_samples=self.num_samples,
-            )[circuit_candidate]
-            circuit_kl_div = circuit_analysis.kl_divergence
-
             # Print results
             print(
                 f"Edges: {len(circuit_candidate.edges)}/{len(initial_edges)} - "
-                f"KL Div: {circuit_kl_div:.4f} - "
-                f"Predictions: {circuit_analysis.predictions}"
+                f"Downstream MSE: {downstream_error:.4f}"
             )
 
             # If below threshold, continue search
-            if circuit_kl_div < threshold:
+            if downstream_error < search_threshold:
                 # Update circuit
                 circuit_edges = circuit_candidate.edges
 
-                # Sort edges by KL divergence (descending)
+                # Sort edges by mean-squared error (descending)
                 estimated_edge_ablation_effects = self.estimate_edge_ablation_effects(
                     downstream_nodes,
                     circuit_edges,
                     upstream_magnitudes,
                     original_downstream_magnitudes,
                     target_token_idx,
-                    target_logits,
                 )
                 least_important_edge = min(estimated_edge_ablation_effects.items(), key=lambda x: x[1])[0]
-                least_important_edge_kl_div = estimated_edge_ablation_effects[least_important_edge]
+                least_important_edge_error = estimated_edge_ablation_effects[least_important_edge]
                 discard_candidates = frozenset({least_important_edge})
 
                 # Check for early stopping
-                if least_important_edge_kl_div > threshold:
-                    print("Stopping search - can't improve KL divergence.")
+                if least_important_edge_error > search_threshold:
+                    print("Stopping search - can't improve downstream error.")
                     break
 
             # If above threshold, stop search
             else:
-                print("Stopping search - KL divergence is too high.")
+                print("Stopping search - Downstream error is too high.")
                 break
 
         # Print final edges (grouped by downstream token)
@@ -139,16 +135,16 @@ class EdgeSearch:
 
         return circuit_edges
 
-    def derive_downstream_magnitudes(
+    def estimate_downstream_mse(
         self,
         downstream_nodes: frozenset[Node],
         edges: frozenset[Edge],
         upstream_magnitudes: torch.Tensor,  # Shape: (T, F)
         original_downstream_magnitudes: torch.Tensor,  # Shape: (T, F)
         target_token_idx: int,
-    ) -> torch.Tensor:  # Shape: (T, F)
+    ) -> float:
         """
-        Derive downstream feature magnitudes from upstream feature magnitudes and edges.
+        Use downstream feature magnitudes derived from upstream feature magnitudes and edges to produce a mean-squared error.
 
         :param downstream_nodes: The downstream nodes to use for deriving downstream feature magnitudes.
         :param edges: The edges to use for deriving downstream feature magnitudes.
@@ -176,17 +172,6 @@ class EdgeSearch:
             num_samples=self.num_samples,
         )
 
-        # Compute downstream feature magnitudes from unpatched upstream feature magnitudes. Used for error correction.
-        computed_downstream_magnitudes = next(  # Shape: (T, F)
-            iter(
-                compute_downstream_magnitudes(
-                    self.model,
-                    upstream_layer_idx,
-                    {Circuit(nodes=frozenset({})): upstream_magnitudes.unsqueeze(0)},
-                ).values()
-            )
-        ).squeeze(0)
-
         # Compute downstream feature magnitudes for each set of dependencies
         sampled_downstream_magnitudes = compute_downstream_magnitudes(  # Shape: (num_samples, T, F)
             self.model,
@@ -200,19 +185,20 @@ class EdgeSearch:
             for node in dependencies_to_nodes[circuit_variant.nodes]:
                 node_to_sampled_magnitudes[node] = magnitudes[:, node.token_idx, node.feature_idx]
 
-        # Patch downstream feature magnitudes using an average of the sampled feature magnitudes
-        patched_downstream_magnitudes = original_downstream_magnitudes.clone()
-        for node, sampled_magnitudes in node_to_sampled_magnitudes.items():
-            token_idx = node.token_idx
-            feature_idx = node.feature_idx
-            mean = sampled_magnitudes.mean(dim=0)
-            error = (
-                computed_downstream_magnitudes[token_idx, feature_idx]
-                - original_downstream_magnitudes[token_idx, feature_idx]
-            )
-            patched_downstream_magnitudes[token_idx, feature_idx] = mean - error
+        # Caculate normalization coefficients for downstream features, which scale magnitudes to [0, 1]
+        norm_coefficients = torch.ones(len(downstream_nodes))
+        layer_profile = self.model_profile[upstream_layer_idx + 1]
+        for i, node in enumerate(node_to_sampled_magnitudes.keys()):
+            feature_profile = layer_profile[int(node.feature_idx)]
+            norm_coefficients[i] = 1.0 / feature_profile.max
 
-        return patched_downstream_magnitudes
+        # Calculate mean-squared error from original downstream feature magnitudes
+        downstream_mses = torch.zeros(len(downstream_nodes))
+        for i, (node, sampled_magnitudes) in enumerate(node_to_sampled_magnitudes.items()):
+            original_magnitude = original_downstream_magnitudes[node.token_idx, node.feature_idx]
+            downstream_mses[i] = torch.mean((norm_coefficients[i] * (sampled_magnitudes - original_magnitude)) ** 2)
+
+        return downstream_mses.mean().item()
 
     def estimate_edge_ablation_effects(
         self,
@@ -221,16 +207,14 @@ class EdgeSearch:
         upstream_magnitudes: torch.Tensor,  # Shape: (T, F)
         original_downstream_magnitudes: torch.Tensor,  # Shape: (T, F)
         target_token_idx: int,
-        target_logits: torch.Tensor,  # Shape: (V)
     ) -> dict[Edge, float]:
         """
-        Estimate the KL divergence that results from ablating each edge in a circuit.
+        Estimate the downstream feature mean-squared error that results from ablating each edge in a circuit.
 
         :param downstream_nodes: The downstream nodes to use for deriving downstream feature magnitudes.
         :param edges: The edges to use for deriving downstream feature magnitudes.
         :param upstream_magnitudes: The upstream feature magnitudes.
         :param original_downstream_magnitudes: The original downstream feature magnitudes.
-        :param target_token_idx: The target token index.
         """
 
         # Create a set of circuit variants with one edge removed
@@ -241,30 +225,17 @@ class EdgeSearch:
             circuit_variants.append(circuit_variant)
             edge_to_circuit_variant[edge] = circuit_variant
 
-        # Compute downstream feature magnitudes for each circuit variant
-        downstream_magnitudes: list[torch.Tensor] = []
-        downstream_idx = next(iter(downstream_nodes)).layer_idx
+        # Compute downstream feature magnitude errors for each circuit variant
+        downstream_errors: dict[Circuit, float] = {}
         for circuit_variant in circuit_variants:
-            magnitudes = self.derive_downstream_magnitudes(
+            error = self.estimate_downstream_mse(
                 downstream_nodes,
                 circuit_variant.edges,
                 upstream_magnitudes,
                 original_downstream_magnitudes,
                 target_token_idx,
             )
-            downstream_magnitudes.append(magnitudes)
+            downstream_errors[circuit_variant] = error
 
-        # Calculate KL divergence for each variant
-        kld_results = analyze_divergence(
-            self.model,
-            self.ablator,
-            downstream_idx,
-            target_token_idx,
-            target_logits,
-            circuit_variants,
-            downstream_magnitudes,
-            self.num_samples,
-        )
-
-        # Map edges to KL divergence
-        return {edge: kld_results[variant].kl_divergence for edge, variant in edge_to_circuit_variant.items()}
+        # Map edges to mean-squared errors
+        return {edge: downstream_errors[variant] for edge, variant in edge_to_circuit_variant.items()}

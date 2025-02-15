@@ -66,8 +66,8 @@ if __name__ == "__main__":
 
     # Set feature ablation strategy
     # ablator = ZeroAblator()
-    k_nearest = 128  # How many nearest neighbors to consider in resampling
-    num_samples = 128  # Number of samples to use for estimating KL divergence
+    k_nearest = 256  # How many nearest neighbors to consider in resampling
+    num_samples = 256  # Number of samples to use for estimating KL divergence
     positional_coefficient = 2.0  # How important is the position of a feature
     ablator = ResampleAblator(
         model_profile,
