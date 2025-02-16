@@ -224,8 +224,8 @@ class FeatureSampleSet:
         feature_samples = []
         block_size: int = self.sample_magnitudes.shape[-1]  # type: ignore
         for i, shard_token_idx in enumerate(self.sample_indices):
-            sample_idx = shard_token_idx // block_size
-            token_idx = shard_token_idx % block_size
+            sample_idx = int(shard_token_idx // block_size)
+            token_idx = int(shard_token_idx % block_size)
             sample = FeatureSample(self.layer_idx, self.feature_idx, sample_idx, token_idx, self.sample_magnitudes[i])
             feature_samples.append(sample)
         return feature_samples
@@ -246,8 +246,8 @@ class FeatureSampleSet:
             tokens = shard.tokens[starting_idx : starting_idx + block_size].tolist()
             data["samples"].append(
                 {
-                    "sample_idx": int(sample.sample_idx),
-                    "token_idx": int(sample.token_idx),
+                    "sample_idx": sample.sample_idx,
+                    "token_idx": sample.token_idx,
                     "text": tokenizer.decode_sequence(tokens),
                     "tokens": tokens,
                     "magnitude_idxs": sample.magnitudes.indices.tolist(),

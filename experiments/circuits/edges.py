@@ -121,7 +121,9 @@ if __name__ == "__main__":
     grouped_edges = defaultdict(list)
     for downstream_node in sorted(downstream_nodes):
         edges = [edge for edge in circuit_edges if edge.downstream == downstream_node]
-        grouped_edges[str(downstream_node)] = [str(edge.upstream) for edge in sorted(edges)]
+        grouped_edges[".".join(map(str, downstream_node.as_tuple()))] = [
+            ".".join(map(str, edge.upstream.as_tuple())) for edge in sorted(edges)
+        ]
 
     # Export circuit features
     data = {
