@@ -11,7 +11,6 @@ from pathlib import Path
 import torch
 
 from circuits import Edge, Node, json_prettyprint
-from circuits.features.cache import ModelCache
 from circuits.features.profiles import FeatureProfile, ModelProfile
 from circuits.features.samples import FeatureSample, ModelSampleSet
 from circuits.search.divergence import get_predictions
