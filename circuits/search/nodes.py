@@ -102,7 +102,7 @@ class NodeSearch:
                 target_token_idx,
                 target_logits,
                 [circuit_candidate],
-                [feature_magnitudes],
+                feature_magnitudes,
                 num_samples=self.num_samples,
             )[circuit_candidate]
             circuit_kl_div = circuit_analysis.kl_divergence
@@ -169,7 +169,7 @@ class NodeSearch:
                 target_token_idx,
                 target_logits,
                 [circuit_candidate],
-                [feature_magnitudes],
+                feature_magnitudes,
                 num_samples=self.num_samples,
             )[circuit_candidate]
             circuit_kl_div = circuit_analysis.kl_divergence
@@ -242,7 +242,7 @@ class NodeSearch:
             target_token_idx,
             target_logits,
             [variant for variant in circuit_variants.values()],
-            [feature_magnitudes] * len(circuit_variants),
+            feature_magnitudes,
             self.num_samples,
         )
 
@@ -275,7 +275,7 @@ class NodeSearch:
             target_token_idx,
             target_logits,
             [variant for variant in circuit_variants.values()],
-            [feature_magnitudes] * len(circuit_variants),
+            feature_magnitudes,
             self.num_samples,
         )
 

@@ -237,7 +237,7 @@ class EdgeSearch:
             upstream_layer_idx,
             target_token_idx,
             circuit_variants,
-            [upstream_magnitudes] * len(circuit_variants),
+            upstream_magnitudes,
             num_samples=self.num_samples,
         )
 

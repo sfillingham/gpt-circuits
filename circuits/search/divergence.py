@@ -23,7 +23,7 @@ def analyze_divergence(
     target_token_idx: int,
     target_logits: torch.Tensor,  # Shape: (V)
     circuit_variants: Sequence[Circuit],  # List of circuit variants
-    feature_magnitudes: Sequence[torch.Tensor],  # List of tensors with shape: (T, F)
+    feature_magnitudes: torch.Tensor,  # Shape: (T, F)
     num_samples: int,
 ) -> dict[Circuit, Divergence]:
     """
@@ -35,7 +35,7 @@ def analyze_divergence(
     :param target_token_idx: The token index to use for circuit extraction.
     :param target_logits: The target logits for the target token.
     :param circuit_variants: The circuit variants to use for circuit extraction.
-    :param feature_magnitudes: A list of feature magnitudes to use for each circuit variant.
+    :param feature_magnitudes: Feature magnitudes to use for each circuit variant.
     :param num_samples: The number of samples to use for ablation.
     """
     # For storing results
@@ -82,7 +82,7 @@ def patch_feature_magnitudes(
     layer_idx: int,
     target_token_idx: int,
     circuit_variants: Sequence[Circuit],
-    feature_magnitudes: Sequence[torch.Tensor],
+    feature_magnitudes: torch.Tensor,
     num_samples: int,
 ) -> dict[Circuit, torch.Tensor]:  # Shape: (num_samples, T, F)
     """
@@ -94,12 +94,12 @@ def patch_feature_magnitudes(
     # Patch feature magnitudes for each variant
     with ThreadPoolExecutor() as executor:
         futures: dict[Future, Circuit] = {}
-        for circuit_variant, magnitudes in zip(circuit_variants, feature_magnitudes):
+        for circuit_variant in circuit_variants:
             future = executor.submit(
                 ablator.patch,
                 layer_idx=layer_idx,
                 target_token_idx=target_token_idx,
-                feature_magnitudes=magnitudes,
+                feature_magnitudes=feature_magnitudes,
                 circuit=circuit_variant,
                 num_samples=num_samples,
             )
