@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
 import numpy as np
+from scipy import sparse
 
-from circuits.features.cache import ModelCache
+from circuits.features.cache import LayerCache, ModelCache
 from circuits.features.profiles import ModelProfile
 
 
@@ -20,19 +21,57 @@ class ClusterCacheKey:
     positional_coefficient: float
 
 
+class Cluster:
+    """
+    Cluster of nearest neighbors using feature magnitudes for a token in a given circuit.
+    """
+
+    layer_cache: LayerCache
+    layer_idx: int
+    token_idx: int
+    idxs: tuple[int, ...]
+
+    def __init__(self, layer_cache: LayerCache, layer_idx: int, token_idx: int, idxs: tuple[int, ...]):
+        self.layer_cache = layer_cache
+        self.layer_idx = layer_idx
+        self.token_idx = token_idx
+        self.idxs = idxs
+
+    def sample_magnitudes(self, num_samples: int) -> sparse.csr_matrix:
+        """
+        Sample feature magnitudes from the cluster.
+
+        :param num_samples: Number of samples to return.
+
+        :return: Sampled feature magnitudes. Shape: (num_samples, F)
+        """
+        sample_size = min(len(self.idxs), num_samples)
+        sample_idxs = np.random.choice(self.idxs, size=sample_size, replace=False)
+
+        # If there are too few candidates, duplicate some
+        if len(sample_idxs) < num_samples:
+            num_duplicates = num_samples - len(sample_idxs)
+            extra_sample_idxs = np.random.choice(sample_idxs, size=num_duplicates, replace=True)
+            sample_idxs = np.concatenate((sample_idxs, extra_sample_idxs))
+
+        # Get feature magnitudes
+        feature_magnitudes = self.layer_cache.csr_matrix[sample_idxs, :].toarray()  # Shape: (num_samples, F)
+        return feature_magnitudes
+
+
 class ClusterSearch:
     """
     Search for nearest neighbors using cached feature magnitudes.
     """
 
     # Map of cached nearest neighbors
-    nearest_neighbors_cache: dict[ClusterCacheKey, np.ndarray] = {}
+    cached_cluster_idxs: dict[ClusterCacheKey, tuple[int, ...]] = {}
 
     def __init__(self, model_profile: ModelProfile, model_cache: ModelCache):
         self.model_profile = model_profile
         self.model_cache = model_cache
 
-    def get_nearest_neighbors(
+    def get_cluster(
         self,
         layer_idx: int,
         token_idx: int,
@@ -40,16 +79,16 @@ class ClusterSearch:
         circuit_feature_idxs: np.ndarray,
         k_nearest: int,
         positional_coefficient: float,
-    ) -> np.ndarray:
+    ) -> Cluster:
         """
         Get nearest neighbors for a single token in a given circuit.
 
-        :param layer_cache: Layer cache to use for resampling.
-        :param token_idx: Token index for which features are sampled.
+        :param layer_idx: Layer index from which features are sampled.
+        :param token_idx: Token index from which features are sampled.
         :param feature_magnitudes: Feature magnitudes for the token. Shape: (F)
         :param circuit_feature_idxs: Indices of features to preserve for this token.
 
-        :return: Indices of nearest neighbors.
+        :return: Cluster representing nearest neighbor.
         """
         assert k_nearest > 0
         layer_profile = self.model_profile[layer_idx]
@@ -68,8 +107,8 @@ class ClusterSearch:
             k_nearest,
             positional_coefficient,
         )
-        if cache_key in self.nearest_neighbors_cache:
-            return self.nearest_neighbors_cache[cache_key]
+        if cluster_idxs := self.cached_cluster_idxs.get(cache_key):
+            return Cluster(layer_cache=layer_cache, layer_idx=layer_idx, token_idx=token_idx, idxs=cluster_idxs)
 
         if num_features == 0:
             # No features to use for sampling
@@ -114,11 +153,30 @@ class ClusterSearch:
         # Get nearest neighbors
         num_neighbors = min(k_nearest, len(row_idxs))
         # TODO: Consider removing first exact match to avoid duplicating original values
-        nearest_neighbor_idxs = row_idxs[np.argsort(mse)[:num_neighbors]]
+        cluster_idxs = tuple(row_idxs[np.argsort(mse)[:num_neighbors]].tolist())
 
-        # Cache nearest neighbors
-        self.nearest_neighbors_cache[cache_key] = nearest_neighbor_idxs
-        return nearest_neighbor_idxs
+        # Cache cluster idxs
+        self.cached_cluster_idxs[cache_key] = cluster_idxs
+        return Cluster(layer_cache=layer_cache, layer_idx=layer_idx, token_idx=token_idx, idxs=cluster_idxs)
+
+    def get_random_cluster(self, layer_idx: int, token_idx: int, num_samples: int) -> Cluster:
+        """
+        Get random cluster for a given layer and token position.
+
+        :param layer_idx: Layer index from which features are sampled.
+        :param token_idx: Token index from which features are sampled.
+        :param num_samples: Number of samples to include in the cluster.
+
+        :return: Cluster representing random samples.
+        """
+        layer_cache = self.model_cache[layer_idx]
+        block_size = layer_cache.block_size
+        num_shard_tokens: int = layer_cache.magnitudes.shape[0]  # type: ignore
+        block_idxs = np.random.choice(range(num_shard_tokens // block_size), size=num_samples, replace=False)
+
+        # Respect token position when choosing indices
+        cluster_idxs = block_idxs * layer_cache.block_size + token_idx
+        return Cluster(layer_cache=layer_cache, layer_idx=layer_idx, token_idx=token_idx, idxs=cluster_idxs)
 
     def get_cache_key(
         self,

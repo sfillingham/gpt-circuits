@@ -15,21 +15,26 @@ SEQUENCE_IDX=$((SHARD_TOKEN_IDX / 128 * 128))
 CIRCUIT_NAME="train.0.$SEQUENCE_IDX.$TOKEN_IDX"
 echo "Extracting circuit: $CIRCUIT_NAME"
 
+# Setup trap to kill all child processes on script exit
+trap 'kill $(jobs -p) 2>/dev/null' EXIT INT
+
 # Extract nodes in parallel
-python -m experiments.circuits.nodes --sequence_idx=$SEQUENCE_IDX --token_idx=$TOKEN_IDX --layer_idx=0 &
-python -m experiments.circuits.nodes --sequence_idx=$SEQUENCE_IDX --token_idx=$TOKEN_IDX --layer_idx=1 &
-python -m experiments.circuits.nodes --sequence_idx=$SEQUENCE_IDX --token_idx=$TOKEN_IDX --layer_idx=2 &
-python -m experiments.circuits.nodes --sequence_idx=$SEQUENCE_IDX --token_idx=$TOKEN_IDX --layer_idx=3 &
-python -m experiments.circuits.nodes --sequence_idx=$SEQUENCE_IDX --token_idx=$TOKEN_IDX --layer_idx=4
+for layer_idx in {0..4}; do
+    python -m experiments.circuits.nodes \
+        --sequence_idx=$SEQUENCE_IDX \
+        --token_idx=$TOKEN_IDX \
+        --layer_idx=$layer_idx &
+done
 
 # Wait for all processes to finish
 wait
 
 # Extract edges in parallel
-python -m experiments.circuits.edges --circuit=$CIRCUIT_NAME --upstream_layer=0 &
-python -m experiments.circuits.edges --circuit=$CIRCUIT_NAME --upstream_layer=1 &
-python -m experiments.circuits.edges --circuit=$CIRCUIT_NAME --upstream_layer=2 &
-python -m experiments.circuits.edges --circuit=$CIRCUIT_NAME --upstream_layer=3
+for layer_idx in {0..3}; do
+    python -m experiments.circuits.edges \
+        --circuit=$CIRCUIT_NAME \
+        --upstream_layer=$layer_idx &
+done
 
 # Wait for all processes to finish
 wait

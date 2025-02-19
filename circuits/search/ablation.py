@@ -108,39 +108,24 @@ class ResampleAblator(Ablator):
 
         :return: Patched feature magnitudes. Shape: (B, F)
         """
-        layer_cache = self.model_cache[layer_idx]
         circuit_feature_idxs = np.array([f.feature_idx for f in token_nodes]).astype(np.int32)
 
         if self.k_nearest is not None:
-            # Get nearest neighbors using MSE
-            nearest_neighbor_idxs = self.cluster_search.get_nearest_neighbors(
+            # Get cluster representing nearest neighbors
+            cluster = self.cluster_search.get_cluster(
                 layer_idx,
                 token_idx,
                 token_feature_magnitudes,
                 circuit_feature_idxs,
-                self.k_nearest,
-                self.positional_coefficient,
+                k_nearest=self.k_nearest,
+                positional_coefficient=self.positional_coefficient,
             )
         else:
-            # Randomly sample from the layer cache
-            num_shard_tokens: int = layer_cache.magnitudes.shape[0]  # type: ignore
-            sequence_idxs = np.random.choice(
-                range(num_shard_tokens // layer_cache.block_size),
-                size=num_samples,
-                replace=False,
-            )
-            # Respect token position when choosing indices
-            nearest_neighbor_idxs = sequence_idxs * layer_cache.block_size + token_idx
+            # Create a random cluster using tokens with the same token position
+            cluster = self.cluster_search.get_random_cluster(layer_idx, token_idx, num_samples)
 
-        # Randomly draw indices from top candidates to include in samples
-        sample_size = min(len(nearest_neighbor_idxs), num_samples)
-        sample_idxs = np.random.choice(nearest_neighbor_idxs, size=sample_size, replace=False)
-        # If there are too few candidates, duplicate some
-        if len(sample_idxs) < num_samples:
-            num_duplicates = num_samples - len(sample_idxs)
-            extra_sample_idxs = np.random.choice(sample_idxs, size=num_duplicates, replace=True)
-            sample_idxs = np.concatenate((sample_idxs, extra_sample_idxs))
-        token_samples = layer_cache.csr_matrix[sample_idxs, :].toarray()  # Shape: (B, F)
+        # Randomly draw sample magnitudes from the cluster
+        token_samples = cluster.sample_magnitudes(num_samples)
 
         # Preserve circuit feature magnitudes
         token_samples[:, circuit_feature_idxs] = token_feature_magnitudes[circuit_feature_idxs]
