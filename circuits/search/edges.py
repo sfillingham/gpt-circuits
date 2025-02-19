@@ -142,7 +142,7 @@ class EdgeSearch:
     ) -> Optional[Edge]:
         """
         Find the least important edge in a circuit. Returns the edge and its mean-squared error.
-        To avoid having unconnected nodes, the last edge to a downstream node will not be considered.
+        To avoid having unconnected nodes, the last edge to a node will not be considered.
         """
         edge_to_error = self.estimate_edge_ablation_effects(
             downstream_nodes,
@@ -155,10 +155,11 @@ class EdgeSearch:
         # Sort edges by mean-squared error (ascending)
         sorted_edges = sorted(edge_to_error.items(), key=lambda x: x[1])
 
-        # Ignore edges that would leave downstream nodes unconnected
-        for edge, error in sorted_edges:
+        # Ignore edges that would leave a node unconnected
+        for edge, _ in sorted_edges:
             if len([e for e in edges if e.downstream == edge.downstream]) > 1:
-                return edge
+                if len([e for e in edges if e.upstream == edge.upstream]) > 1:
+                    return edge
 
         # All edges are required
         return None
