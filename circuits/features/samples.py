@@ -91,8 +91,8 @@ class LayerSampleSet:
     Contains feature samples for a layer.
     """
 
-    SAMPLES_PERCENTILE = 90  # Percentile to use for feature samples
-    SUGGESTED_SAMPLE_COUNT = 100  # Number of samples to use (if possible)
+    SAMPLES_PERCENTILE = 0  # Percentile to use for feature samples
+    SUGGESTED_SAMPLE_COUNT = 250  # Number of samples to use (if possible)
 
     def __init__(self, layer_idx: int):
         """
@@ -136,7 +136,7 @@ class LayerSampleSet:
             sparse_feature_magnitudes = layer_cache.csc_matrix[:, feature_idx]
             non_zero_rows = sparse_feature_magnitudes.nonzero()[0]
             non_zero_magnitudes = sparse_feature_magnitudes.data
-            use_topk = non_zero_magnitudes.size < (100 * 100) / (100.0 - self.SAMPLES_PERCENTILE)
+            use_topk = non_zero_magnitudes.size < 100 / (100.0 - self.SAMPLES_PERCENTILE) * self.SUGGESTED_SAMPLE_COUNT
             if use_topk:
                 topk = min(non_zero_magnitudes.size, self.SUGGESTED_SAMPLE_COUNT)
                 top_rows = sorted(zip(non_zero_rows, non_zero_magnitudes), key=lambda x: -x[1])[:topk]
