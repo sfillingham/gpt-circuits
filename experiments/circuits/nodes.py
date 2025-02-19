@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", type=str, default="train", help="Dataset split to use")
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model to analyze")
     parser.add_argument("--layer_idx", type=int, default=0, help="SAE layer to analyze")
-    parser.add_argument("--threshold", type=float, default=0.1, help="Max threshold for KL divergence")
+    parser.add_argument("--threshold", type=float, default=0.2, help="Max threshold for KL divergence")
     parser.add_argument("--start_from", type=int, default=0, help="Index of token to start search from")
     return parser.parse_args()
 

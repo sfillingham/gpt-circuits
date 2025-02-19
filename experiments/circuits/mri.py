@@ -97,7 +97,7 @@ def main():
     )
 
     # Export data.json
-    export_sample_data(
+    export_circuit_data(
         base_dir / "samples" / str(sequence_idx + target_token_idx),
         model,
         model_profile,
@@ -131,7 +131,7 @@ def export_similar_samples(samples_dir: Path):
         f.write(json_prettyprint(data))
 
 
-def export_sample_data(
+def export_circuit_data(
     sample_dir: Path,
     model: SparsifiedGPT,
     model_profile: ModelProfile,
@@ -199,17 +199,22 @@ def export_sample_data(
         dependencies = []
         upstream_edges = [edge for edge in edges if edge.downstream == downstream_node]
         for edge in sorted(upstream_edges):
-            dependencies.append([node_to_key(edge.upstream, target_token_idx), 1.0])
+            edge_weight = 1.0  # TODO: Calculate edge weight
+            dependencies.append([node_to_key(edge.upstream, target_token_idx), edge_weight])
         data["ablation_graph"][node_to_key(downstream_node, target_token_idx)] = dependencies
 
     # Set group alation graph
     data["group_ablation_graph"] = {}
     for downstream_node in sorted(set(edge.downstream for edge in edges)):
         groups = []
+        downstream_feature_magnitude = output.feature_magnitudes[downstream_node.layer_idx][
+            0, downstream_node.token_idx, downstream_node.feature_idx
+        ].item()
         upstream_edges = [edge for edge in edges if edge.downstream == downstream_node]
         upstream_blocks = set((edge.upstream.layer_idx, edge.upstream.token_idx) for edge in upstream_edges)
         for layer_idx, token_idx in sorted(upstream_blocks):
-            groups.append([f"{target_token_idx - token_idx}.{layer_idx}", 1.0])
+            block_weight = downstream_feature_magnitude  # TODO: Calculate block weight
+            groups.append([f"{target_token_idx - token_idx}.{layer_idx}", block_weight])
         data["group_ablation_graph"][node_to_key(downstream_node, target_token_idx)] = groups
 
     # Export to data.json
