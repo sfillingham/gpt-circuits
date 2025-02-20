@@ -12,8 +12,8 @@ for SHARD_TOKEN_ID in "${SHARD_TOKEN_IDS[@]}"; do
   echo "Processing SHARD_TOKEN_ID=${SHARD_TOKEN_ID}"
 
   # Extract circuits using resampling ablation
-  TIMEOUT 30m ./experiments/circuits/extract.sh $SHARD_TOKEN_ID toy-resampling true
+  TIMEOUT 60m ./experiments/circuits/extract.sh $SHARD_TOKEN_ID toy-resampling true
 
   # Extract circuits using zero ablation
-  TIMEOUT 30m ./experiments/circuits/extract.sh $SHARD_TOKEN_ID toy-zero false
+  TIMEOUT 60m ./experiments/circuits/extract.sh $SHARD_TOKEN_ID toy-zero false
 done
