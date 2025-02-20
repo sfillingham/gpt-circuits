@@ -1,0 +1,10 @@
+#!/bin/bash
+DIRNAME="toy-resampling"
+
+SHARD_TOKEN_IDS=(7010 17396 196593 221099 229218 300553 301857 352614 382875 393485 512822 677317 780099 872699 899938 946999)
+
+# Loop through each SHARD_TOKEN_ID
+for SHARD_TOKEN_ID in "${SHARD_TOKEN_IDS[@]}"; do
+  echo "Processing SHARD_TOKEN_ID=${SHARD_TOKEN_ID}"
+  source experiments/circuits/extract.sh $SHARD_TOKEN_ID $DIRNAME true
+done

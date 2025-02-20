@@ -1,9 +1,15 @@
 #!/bin/bash
-# Extracts a circuit using a given token index
-# Example usage: `source experiments/circuits/extract.sh 51`
+# Extracts a circuit using a given (i) a token index, (ii) an dirname, and (iii) a resampling strategy.
+# Example usage: `source experiments/circuits/extract.sh 51 toy-resampling true`
 
 # Set first positional argument as the shard token idx (default to 0)
 SHARD_TOKEN_IDX=${1:-0}
+
+# Set the second positional argument as the dirname (default to "mri")
+DIRNAME=${2:-mri}
+
+# Set ablation strategy
+SHOULD_RESAMPLE=${3:-true}
 
 # Set token idx to be the shard token idx % 128
 TOKEN_IDX=$((SHARD_TOKEN_IDX % 128))
@@ -23,7 +29,8 @@ for layer_idx in {0..4}; do
     python -m experiments.circuits.nodes \
         --sequence_idx=$SEQUENCE_IDX \
         --token_idx=$TOKEN_IDX \
-        --layer_idx=$layer_idx &
+        --layer_idx=$layer_idx \
+        --resample=SHOULD_RESAMPLE &
 done
 
 # Wait for all processes to finish
@@ -40,4 +47,4 @@ done
 wait
 
 # Export the circuit
-python -m experiments.circuits.mri --circuit=$CIRCUIT_NAME --dirname=mars
+python -m experiments.circuits.mri --circuit=$CIRCUIT_NAME --dirname=$DIRNAME

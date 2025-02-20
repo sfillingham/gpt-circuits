@@ -1,7 +1,7 @@
 """
 Reformat circuit exports for GPT MRI app.
 
-$ python -m experiments.circuits.mri --circuit=train.0.0.51 --dirname=mars
+$ python -m experiments.circuits.mri --circuit=train.0.0.51 --dirname=mri
 """
 
 import argparse
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="e2e.jumprelu.shakespeare_64x4", help="Model name")
     parser.add_argument("--circuit", type=str, default="train.0.0.51", help="Circuit directory name")
-    parser.add_argument("--dirname", type=str, default="mars", help="Output directory name")
+    parser.add_argument("--dirname", type=str, default="mri", help="Output directory name")
     return parser.parse_args()
 
 

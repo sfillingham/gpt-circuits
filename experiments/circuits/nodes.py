@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--layer_idx", type=int, default=0, help="SAE layer to analyze")
     parser.add_argument("--threshold", type=float, default=0.2, help="Max threshold for KL divergence")
     parser.add_argument("--start_from", type=int, default=0, help="Index of token to start search from")
+    parser.add_argument("--resample", type=bool, default=True, help="Should we use resampling ablation?")
     return parser.parse_args()
 
 
@@ -65,16 +66,19 @@ if __name__ == "__main__":
     model_cache = ModelCache(checkpoint_dir)
 
     # Set feature ablation strategy
-    # ablator = ZeroAblator()
-    k_nearest = 256  # How many nearest neighbors to consider in resampling
-    num_samples = 256  # Number of samples to use for estimating KL divergence
-    positional_coefficient = 2.0  # How important is the position of a feature
-    ablator = ResampleAblator(
-        model_profile,
-        model_cache,
-        k_nearest=k_nearest,
-        positional_coefficient=positional_coefficient,
-    )
+    if args.resample:
+        num_samples = 256  # Number of samples to use for estimating KL divergence
+        k_nearest = 256  # How many nearest neighbors to consider in resampling
+        positional_coefficient = 2.0  # How important is the position of a feature
+        ablator = ResampleAblator(
+            model_profile,
+            model_cache,
+            k_nearest=k_nearest,
+            positional_coefficient=positional_coefficient,
+        )
+    else:
+        num_samples = 1  # Number of samples to use for estimating KL divergence
+        ablator = ZeroAblator()
 
     # Load shard
     shard = DatasetShard(dir_path=args.data_dir, split=args.split, shard_idx=args.shard_idx)
